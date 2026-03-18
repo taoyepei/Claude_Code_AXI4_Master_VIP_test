@@ -119,15 +119,15 @@ package axi4_pkg;
 
     function void do_record(uvm_recorder recorder);
       super.do_record(recorder);
-      `uvm_record_int("m_data_width", m_data_width)
-      `uvm_record_int("m_addr_width", m_addr_width)
-      `uvm_record_int("m_id_width", m_id_width)
-      `uvm_record_int("m_max_outstanding", m_max_outstanding)
-      `uvm_record_int("m_trans_interval", m_trans_interval)
-      `uvm_record_int("m_data_before_addr_osd", m_data_before_addr_osd)
-      `uvm_record_int("m_wtimeout", m_wtimeout)
-      `uvm_record_int("m_rtimeout", m_rtimeout)
-      `uvm_record_int("m_support_data_before_addr", m_support_data_before_addr)
+      `uvm_record_int("m_data_width", m_data_width, $bits(m_data_width))
+      `uvm_record_int("m_addr_width", m_addr_width, $bits(m_addr_width))
+      `uvm_record_int("m_id_width", m_id_width, $bits(m_id_width))
+      `uvm_record_int("m_max_outstanding", m_max_outstanding, $bits(m_max_outstanding))
+      `uvm_record_int("m_trans_interval", m_trans_interval, $bits(m_trans_interval))
+      `uvm_record_int("m_data_before_addr_osd", m_data_before_addr_osd, $bits(m_data_before_addr_osd))
+      `uvm_record_int("m_wtimeout", m_wtimeout, $bits(m_wtimeout))
+      `uvm_record_int("m_rtimeout", m_rtimeout, $bits(m_rtimeout))
+      `uvm_record_int("m_support_data_before_addr", m_support_data_before_addr, $bits(m_support_data_before_addr))
     endfunction
   endclass
 
