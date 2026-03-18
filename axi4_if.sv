@@ -267,31 +267,51 @@ interface axi4_if #(
 
   property axlen_range_valid;
     @(posedge aclk) disable iff (!areset_n)
-    (awvalid |-> (awlen <= 8'd255)) &&
+    (awvalid |-> (awlen <= 8'd255));
+  endproperty
+
+  property axlen_range_valid_ar;
+    @(posedge aclk) disable iff (!areset_n)
     (arvalid |-> (arlen <= 8'd255));
   endproperty
 
-  property fixed_burst_len;
+  property fixed_burst_len_aw;
     @(posedge aclk) disable iff (!areset_n)
-    ((awvalid && awburst == 2'b00) |-> (awlen <= 8'd15)) &&
+    ((awvalid && awburst == 2'b00) |-> (awlen <= 8'd15));
+  endproperty
+
+  property fixed_burst_len_ar;
+    @(posedge aclk) disable iff (!areset_n)
     ((arvalid && arburst == 2'b00) |-> (arlen <= 8'd15));
   endproperty
 
-  property wrap_burst_len;
+  property wrap_burst_len_aw;
     @(posedge aclk) disable iff (!areset_n)
-    ((awvalid && awburst == 2'b10) |-> (awlen inside {8'd1, 8'd3, 8'd7, 8'd15})) &&
-    ((arvalid && arburst == 2'b10) |-> (awlen inside {8'd1, 8'd3, 8'd7, 8'd15}));
+    ((awvalid && awburst == 2'b10) |-> (awlen inside {8'd1, 8'd3, 8'd7, 8'd15}));
   endproperty
 
-  property axburst_encoding;
+  property wrap_burst_len_ar;
     @(posedge aclk) disable iff (!areset_n)
-    (awvalid |-> (awburst != 2'b11)) &&
+    ((arvalid && arburst == 2'b10) |-> (arlen inside {8'd1, 8'd3, 8'd7, 8'd15}));
+  endproperty
+
+  property axburst_encoding_aw;
+    @(posedge aclk) disable iff (!areset_n)
+    (awvalid |-> (awburst != 2'b11));
+  endproperty
+
+  property axburst_encoding_ar;
+    @(posedge aclk) disable iff (!areset_n)
     (arvalid |-> (arburst != 2'b11));
   endproperty
 
-  property axsize_range;
+  property axsize_range_aw;
     @(posedge aclk) disable iff (!areset_n)
-    (awvalid |-> ((1 << awsize) <= (DATA_WIDTH / 8))) &&
+    (awvalid |-> ((1 << awsize) <= (DATA_WIDTH / 8)));
+  endproperty
+
+  property axsize_range_ar;
+    @(posedge aclk) disable iff (!areset_n)
     (arvalid |-> ((1 << arsize) <= (DATA_WIDTH / 8)));
   endproperty
 
@@ -330,20 +350,35 @@ interface axi4_if #(
   assert_rlast_correct : assert property (rlast_correct)
     else `uvm_error("AXI4_IF", "RLAST not asserted at correct beat")
 
-  assert_axlen_range : assert property (axlen_range_valid)
-    else `uvm_error("AXI4_IF", "AXLEN out of range (0-255)")
+  assert_axlen_range_aw : assert property (axlen_range_valid)
+    else `uvm_error("AXI4_IF", "AWLEN out of range (0-255)")
 
-  assert_fixed_burst_len : assert property (fixed_burst_len)
-    else `uvm_error("AXI4_IF", "FIXED burst length must be <= 16")
+  assert_axlen_range_ar : assert property (axlen_range_valid_ar)
+    else `uvm_error("AXI4_IF", "ARLEN out of range (0-255)")
 
-  assert_wrap_burst_len : assert property (wrap_burst_len)
-    else `uvm_error("AXI4_IF", "WRAP burst length must be 2,4,8,16")
+  assert_fixed_burst_len_aw : assert property (fixed_burst_len_aw)
+    else `uvm_error("AXI4_IF", "AW FIXED burst length must be <= 16")
 
-  assert_axburst_encoding : assert property (axburst_encoding)
-    else `uvm_error("AXI4_IF", "AXBURST encoding invalid (cannot be 2'b11)")
+  assert_fixed_burst_len_ar : assert property (fixed_burst_len_ar)
+    else `uvm_error("AXI4_IF", "AR FIXED burst length must be <= 16")
 
-  assert_axsize_range : assert property (axsize_range)
-    else `uvm_error("AXI4_IF", "AXSIZE exceeds data width")
+  assert_wrap_burst_len_aw : assert property (wrap_burst_len_aw)
+    else `uvm_error("AXI4_IF", "AW WRAP burst length must be 2,4,8,16")
+
+  assert_wrap_burst_len_ar : assert property (wrap_burst_len_ar)
+    else `uvm_error("AXI4_IF", "AR WRAP burst length must be 2,4,8,16")
+
+  assert_axburst_encoding_aw : assert property (axburst_encoding_aw)
+    else `uvm_error("AXI4_IF", "AWBURST encoding invalid (cannot be 2'b11)")
+
+  assert_axburst_encoding_ar : assert property (axburst_encoding_ar)
+    else `uvm_error("AXI4_IF", "ARBURST encoding invalid (cannot be 2'b11)")
+
+  assert_axsize_range_aw : assert property (axsize_range_aw)
+    else `uvm_error("AXI4_IF", "AWSIZE exceeds data width")
+
+  assert_axsize_range_ar : assert property (axsize_range_ar)
+    else `uvm_error("AXI4_IF", "ARSIZE exceeds data width")
 
   assert_wdata_stable : assert property (wdata_stable)
     else `uvm_error("AXI4_IF", "WDATA/WSTRB/WLAST not stable during handshake")
