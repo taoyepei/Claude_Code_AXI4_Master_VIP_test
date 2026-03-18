@@ -32,10 +32,10 @@ class axi4_sequence extends uvm_sequence #(axi4_transaction);
     m_max_len = 15;
   endfunction
 
-  function void pre_start();
+  task pre_start();
     super.pre_start();
     `uvm_info(get_type_name(), $sformatf("Starting sequence: %s", get_name()), UVM_LOW)
-  endfunction
+  endtask
 
   task pre_body();
     super.pre_body();
@@ -76,10 +76,10 @@ class axi4_sequence extends uvm_sequence #(axi4_transaction);
     end
   endtask
 
-  function void post_start();
+  task post_start();
     super.post_start();
     `uvm_info(get_type_name(), $sformatf("Sequence %s completed", get_name()), UVM_LOW)
-  endfunction
+  endtask
 
 endclass : axi4_sequence
 
