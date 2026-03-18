@@ -16,7 +16,62 @@ interface axi4_if #(
   // Calculate strobe width
   localparam int STRB_WIDTH = DATA_WIDTH / 8;
 
-  // Clocking blocks
+  // Signal declarations - must be before clocking blocks
+  // Write address channel
+  logic [ID_WIDTH-1:0]   awid;
+  logic [ADDR_WIDTH-1:0] awaddr;
+  logic [7:0]            awlen;
+  logic [2:0]            awsize;
+  logic [1:0]            awburst;
+  logic                  awlock;
+  logic [3:0]            awcache;
+  logic [2:0]            awprot;
+  logic [3:0]            awqos;
+  logic [3:0]            awregion;
+  logic [USER_WIDTH-1:0] awuser;
+  logic                  awvalid;
+  logic                  awready;
+
+  // Write data channel
+  logic [DATA_WIDTH-1:0] wdata;
+  logic [STRB_WIDTH-1:0] wstrb;
+  logic                  wlast;
+  logic [USER_WIDTH-1:0] wuser;
+  logic                  wvalid;
+  logic                  wready;
+
+  // Write response channel
+  logic [ID_WIDTH-1:0]   bid;
+  logic [1:0]            bresp;
+  logic [USER_WIDTH-1:0] buser;
+  logic                  bvalid;
+  logic                  bready;
+
+  // Read address channel
+  logic [ID_WIDTH-1:0]   arid;
+  logic [ADDR_WIDTH-1:0] araddr;
+  logic [7:0]            arlen;
+  logic [2:0]            arsize;
+  logic [1:0]            arburst;
+  logic                  arlock;
+  logic [3:0]            arcache;
+  logic [2:0]            arprot;
+  logic [3:0]            arqos;
+  logic [3:0]            arregion;
+  logic [USER_WIDTH-1:0] aruser;
+  logic                  arvalid;
+  logic                  arready;
+
+  // Read data channel
+  logic [ID_WIDTH-1:0]   rid;
+  logic [DATA_WIDTH-1:0] rdata;
+  logic [1:0]            rresp;
+  logic                  rlast;
+  logic [USER_WIDTH-1:0] ruser;
+  logic                  rvalid;
+  logic                  rready;
+
+  // Clocking blocks - after signal declarations
   clocking m_cb @(posedge aclk);
     default input #1ns output #1ns;
 
@@ -181,60 +236,6 @@ interface axi4_if #(
     input rready;
   endclocking : mon_cb
 
-  // Write address channel
-  logic [ID_WIDTH-1:0]   awid;
-  logic [ADDR_WIDTH-1:0] awaddr;
-  logic [7:0]            awlen;
-  logic [2:0]            awsize;
-  logic [1:0]            awburst;
-  logic                  awlock;
-  logic [3:0]            awcache;
-  logic [2:0]            awprot;
-  logic [3:0]            awqos;
-  logic [3:0]            awregion;
-  logic [USER_WIDTH-1:0] awuser;
-  logic                  awvalid;
-  logic                  awready;
-
-  // Write data channel
-  logic [DATA_WIDTH-1:0] wdata;
-  logic [STRB_WIDTH-1:0] wstrb;
-  logic                  wlast;
-  logic [USER_WIDTH-1:0] wuser;
-  logic                  wvalid;
-  logic                  wready;
-
-  // Write response channel
-  logic [ID_WIDTH-1:0]   bid;
-  logic [1:0]            bresp;
-  logic [USER_WIDTH-1:0] buser;
-  logic                  bvalid;
-  logic                  bready;
-
-  // Read address channel
-  logic [ID_WIDTH-1:0]   arid;
-  logic [ADDR_WIDTH-1:0] araddr;
-  logic [7:0]            arlen;
-  logic [2:0]            arsize;
-  logic [1:0]            arburst;
-  logic                  arlock;
-  logic [3:0]            arcache;
-  logic [2:0]            arprot;
-  logic [3:0]            arqos;
-  logic [3:0]            arregion;
-  logic [USER_WIDTH-1:0] aruser;
-  logic                  arvalid;
-  logic                  arready;
-
-  // Read data channel
-  logic [ID_WIDTH-1:0]   rid;
-  logic [DATA_WIDTH-1:0] rdata;
-  logic [1:0]            rresp;
-  logic                  rlast;
-  logic [USER_WIDTH-1:0] ruser;
-  logic                  rvalid;
-  logic                  rready;
-
   // Assertion properties
   property awvalid_stable;
     @(posedge aclk) disable iff (!areset_n)
@@ -279,7 +280,7 @@ interface axi4_if #(
   property wrap_burst_len;
     @(posedge aclk) disable iff (!areset_n)
     ((awvalid && awburst == 2'b10) |-> (awlen inside {8'd1, 8'd3, 8'd7, 8'd15})) &&
-    ((arvalid && arburst == 2'b10) |-> (arlen inside {8'd1, 8'd3, 8'd7, 8'd15}));
+    ((arvalid && arburst == 2'b10) |-> (awlen inside {8'd1, 8'd3, 8'd7, 8'd15}));
   endproperty
 
   property axburst_encoding;
