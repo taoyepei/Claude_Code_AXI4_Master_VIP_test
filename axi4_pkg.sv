@@ -100,12 +100,8 @@ package axi4_pkg;
 
     function string convert2string();
       string s;
-      s = $sformatf("AXI4_CFG: data_width=%0d, addr_width=%0d, id_width=%0d, "
-                    "max_outstanding=%0d, trans_interval=%0d, data_before_addr_osd=%0d, "
-                    "wtimeout=%0d, rtimeout=%0d, support_data_before_addr=%0b",
-                    m_data_width, m_addr_width, m_id_width,
-                    m_max_outstanding, m_trans_interval, m_data_before_addr_osd,
-                    m_wtimeout, m_rtimeout, m_support_data_before_addr);
+      s = $sformatf("AXI4_CFG: data_width=%0d, addr_width=%0d, id_width=%0d, max_outstanding=%0d, trans_interval=%0d, data_before_addr_osd=%0d, wtimeout=%0d, rtimeout=%0d, support_data_before_addr=%0b",
+                    m_data_width, m_addr_width, m_id_width, m_max_outstanding, m_trans_interval, m_data_before_addr_osd, m_wtimeout, m_rtimeout, m_support_data_before_addr);
       return s;
     endfunction
 

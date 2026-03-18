@@ -1,11 +1,11 @@
-+incdir+.
++incdir+$AI_GEN_AXI4_VIP_PATH
 
-axi4_pkg.sv
-axi4_if.sv
-axi4_transaction.sv
-axi4_sequence.sv
-axi4_sequencer.sv
-axi4_master_driver.sv
-axi4_monitor.sv
-axi4_master_agent.sv
-axi4_env.sv
+$AI_GEN_AXI4_VIP_PATH/axi4_pkg.sv
+$AI_GEN_AXI4_VIP_PATH/axi4_if.sv
+$AI_GEN_AXI4_VIP_PATH/axi4_transaction.sv
+$AI_GEN_AXI4_VIP_PATH/axi4_sequence.sv
+$AI_GEN_AXI4_VIP_PATH/axi4_sequencer.sv
+$AI_GEN_AXI4_VIP_PATH/axi4_master_driver.sv
+$AI_GEN_AXI4_VIP_PATH/axi4_monitor.sv
+$AI_GEN_AXI4_VIP_PATH/axi4_master_agent.sv
+$AI_GEN_AXI4_VIP_PATH/axi4_env.sv
