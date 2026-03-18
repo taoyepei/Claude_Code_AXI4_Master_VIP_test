@@ -11,20 +11,23 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   virtual axi4_if m_vif;
   axi4_cfg        m_cfg;
 
-  // Transaction queues for outstanding support
-  axi4_transaction m_aw_queue[$];
-  axi4_transaction m_ar_queue[$];
+  // Outstanding transaction tracking
+  axi4_transaction m_aw_pending[$];
+  axi4_transaction m_ar_pending[$];
   axi4_transaction m_w_queue[$];
 
-  // Split transaction tracking
-  int m_split_counter;
+  // Write response tracking (ID -> transaction)
+  axi4_transaction m_b_pending[logic [31:0]];
+
+  // Split transaction ID allocation
+  int m_next_split_id;
 
   // Timing control
   int m_trans_interval;
 
   function new(string name = "axi4_master_driver", uvm_component parent);
     super.new(name, parent);
-    m_split_counter = 0;
+    m_next_split_id = 0;
     m_trans_interval = 0;
   endfunction
 
@@ -45,6 +48,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
   task run_phase(uvm_phase phase);
     fork
+      get_and_drive();
       drive_aw_channel();
       drive_w_channel();
       drive_b_channel();
@@ -53,18 +57,52 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     join
   endtask
 
+  // Get transactions from sequencer and split if needed
+  task get_and_drive();
+    axi4_transaction trans;
+    axi4_transaction split_trans[$];
+
+    forever begin
+      seq_item_port.get_next_item(trans);
+
+      split_transaction(trans, split_trans);
+
+      // Queue split transactions for address channel
+      foreach (split_trans[i]) begin
+        if (split_trans[i].m_trans_type == WRITE) begin
+          // Wait if max outstanding reached
+          while (m_aw_pending.size() >= m_cfg.m_max_outstanding) begin
+            @(m_vif.m_cb);
+          end
+          m_aw_pending.push_back(split_trans[i]);
+        end else begin
+          // Read transaction
+          while (m_ar_pending.size() >= m_cfg.m_max_outstanding) begin
+            @(m_vif.m_cb);
+          end
+          m_ar_pending.push_back(split_trans[i]);
+        end
+      end
+
+      seq_item_port.item_done();
+    end
+  endtask
+
   // Split transaction if needed
   function void split_transaction(axi4_transaction trans, ref axi4_transaction split_trans[$]);
     int remaining_len;
-    int current_len;
     int current_addr;
     int bytes_per_beat;
-    int boundary_4kb;
+    int boundary_2kb;
     axi4_transaction new_trans;
+    logic [31:0] base_id;
 
     split_trans.delete();
+    base_id = trans.m_id;
 
+    // Check if split needed
     if (trans.m_burst != INCR || trans.m_len <= 16) begin
+      trans.m_split_id = 0;
       split_trans.push_back(trans);
       return;
     end
@@ -72,15 +110,17 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     bytes_per_beat = 1 << trans.m_size;
     remaining_len = trans.m_len;
     current_addr = trans.m_addr;
-    boundary_4kb = ((current_addr / 4096) + 1) * 4096;
+    boundary_2kb = ((current_addr / 2048) + 1) * 2048;
 
     while (remaining_len > 0) begin
       int max_len_this_burst;
       int len_this_burst;
+      int bytes_to_boundary;
+      int max_beats_to_boundary;
 
-      // Calculate max length before hitting 4KB boundary
-      int bytes_to_boundary = boundary_4kb - current_addr;
-      int max_beats_to_boundary = (bytes_to_boundary + bytes_per_beat - 1) / bytes_per_beat;
+      // Calculate max length before hitting 2KB boundary
+      bytes_to_boundary = boundary_2kb - current_addr;
+      max_beats_to_boundary = (bytes_to_boundary + bytes_per_beat - 1) / bytes_per_beat;
 
       max_len_this_burst = (remaining_len < 32) ? remaining_len : 32;
 
@@ -94,11 +134,13 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
         len_this_burst = 0;
       end
 
-      new_trans = axi4_transaction::type_id::create($sformatf("split_trans_%0d", m_split_counter++));
+      new_trans = axi4_transaction::type_id::create($sformatf("split_trans_%0d", m_next_split_id));
       new_trans.copy(trans);
       new_trans.m_addr = current_addr;
       new_trans.m_len = len_this_burst;
-      new_trans.m_split_id = m_split_counter;
+      new_trans.m_split_id = m_next_split_id;
+      // Each split burst uses different ID
+      new_trans.m_id = base_id + m_next_split_id;
 
       // Adjust data and wstrb for split
       new_trans.m_data.delete();
@@ -112,12 +154,13 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       end
 
       split_trans.push_back(new_trans);
+      m_next_split_id++;
 
       remaining_len = remaining_len - len_this_burst - 1;
       current_addr = current_addr + (len_this_burst + 1) * bytes_per_beat;
 
       if (remaining_len > 0) begin
-        boundary_4kb = ((current_addr / 4096) + 1) * 4096;
+        boundary_2kb = ((current_addr / 2048) + 1) * 2048;
       end
     end
   endfunction
@@ -125,85 +168,80 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   // Drive write address channel
   task drive_aw_channel();
     axi4_transaction trans;
-    axi4_transaction split_trans[$];
 
     forever begin
-      seq_item_port.try_next_item(trans);
-      if (trans == null) begin
+      @(m_vif.m_cb);
+
+      if (m_aw_pending.size() > 0) begin
+        trans = m_aw_pending.pop_front();
+
+        m_vif.m_cb.awid <= trans.m_id;
+        m_vif.m_cb.awaddr <= trans.m_addr;
+        m_vif.m_cb.awlen <= trans.m_len;
+        m_vif.m_cb.awsize <= trans.m_size;
+        m_vif.m_cb.awburst <= trans.m_burst;
+        m_vif.m_cb.awlock <= trans.m_lock;
+        m_vif.m_cb.awcache <= trans.m_cache;
+        m_vif.m_cb.awprot <= trans.m_prot;
+        m_vif.m_cb.awqos <= trans.m_qos;
+        m_vif.m_cb.awregion <= trans.m_region;
+        m_vif.m_cb.awuser <= trans.m_user;
+        m_vif.m_cb.awvalid <= 1'b1;
+
         @(m_vif.m_cb);
-        continue;
-      end
-
-      if (trans.m_trans_type == WRITE) begin
-        split_transaction(trans, split_trans);
-
-        for (int i = 0; i < split_trans.size(); i++) begin
-          axi4_transaction split = split_trans[i];
-
-          m_vif.m_cb.awid <= split.m_id;
-          m_vif.m_cb.awaddr <= split.m_addr;
-          m_vif.m_cb.awlen <= split.m_len;
-          m_vif.m_cb.awsize <= split.m_size;
-          m_vif.m_cb.awburst <= split.m_burst;
-          m_vif.m_cb.awlock <= split.m_lock;
-          m_vif.m_cb.awcache <= split.m_cache;
-          m_vif.m_cb.awprot <= split.m_prot;
-          m_vif.m_cb.awqos <= split.m_qos;
-          m_vif.m_cb.awregion <= split.m_region;
-          m_vif.m_cb.awuser <= split.m_user;
-          m_vif.m_cb.awvalid <= 1'b1;
-
+        while (!m_vif.m_cb.awready) begin
           @(m_vif.m_cb);
-          while (!m_vif.m_cb.awready) begin
-            @(m_vif.m_cb);
-          end
+        end
 
-          split.m_addr_accept_time = $time;
-          m_vif.m_cb.awvalid <= 1'b0;
-          m_aw_queue.push_back(split);
+        trans.m_addr_accept_time = $time;
+        m_vif.m_cb.awvalid <= 1'b0;
 
-          for (int j = 0; j < m_trans_interval; j++) begin
-            @(m_vif.m_cb);
-          end
+        // Track for write completion
+        m_b_pending[trans.m_id] = trans;
+
+        // Queue for W channel if data_before_addr enabled
+        if (m_cfg.m_support_data_before_addr) begin
+          m_w_queue.push_back(trans);
+        end else begin
+          // Wait for W channel to request data
+          m_w_queue.push_back(trans);
+        end
+
+        // Transaction interval
+        for (int j = 0; j < m_trans_interval; j++) begin
+          @(m_vif.m_cb);
         end
       end
-
-      seq_item_port.item_done();
     end
   endtask
 
   // Drive write data channel
   task drive_w_channel();
     axi4_transaction trans;
-    int w_queue_idx;
 
     forever begin
       @(m_vif.m_cb);
 
-      if (m_aw_queue.size() > 0 && m_w_queue.size() < m_cfg.m_data_before_addr_osd) begin
-        trans = m_aw_queue.pop_front();
-        m_w_queue.push_back(trans);
-      end
-
       if (m_w_queue.size() > 0) begin
-        trans = m_w_queue[0];
-        w_queue_idx = 0;
+        // Check if allowed to send data before address
+        if (!m_cfg.m_support_data_before_addr || m_b_pending.size() > 0) begin
+          trans = m_w_queue.pop_front();
 
-        for (int beat = 0; beat <= trans.m_len; beat++) begin
-          m_vif.m_cb.wdata <= trans.m_data[beat];
-          m_vif.m_cb.wstrb <= trans.m_wstrb[beat];
-          m_vif.m_cb.wlast <= (beat == trans.m_len);
-          m_vif.m_cb.wvalid <= 1'b1;
+          for (int beat = 0; beat <= trans.m_len; beat++) begin
+            m_vif.m_cb.wdata <= trans.m_data[beat];
+            m_vif.m_cb.wstrb <= trans.m_wstrb[beat];
+            m_vif.m_cb.wlast <= (beat == trans.m_len);
+            m_vif.m_cb.wvalid <= 1'b1;
 
-          @(m_vif.m_cb);
-          while (!m_vif.m_cb.wready) begin
             @(m_vif.m_cb);
+            while (!m_vif.m_cb.wready) begin
+              @(m_vif.m_cb);
+            end
           end
-        end
 
-        trans.m_data_complete_time = $time;
-        m_vif.m_cb.wvalid <= 1'b0;
-        m_w_queue.delete(w_queue_idx);
+          trans.m_data_complete_time = $time;
+          m_vif.m_cb.wvalid <= 1'b0;
+        end
       end
     end
   endtask
@@ -216,7 +254,9 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       m_vif.m_cb.bready <= 1'b1;
 
       if (m_vif.m_cb.bvalid) begin
-        // Just accept the response, no dependency on bresp per spec
+        if (m_b_pending.exists(m_vif.m_cb.bid)) begin
+          m_b_pending.delete(m_vif.m_cb.bid);
+        end
       end
     end
   endtask
@@ -224,83 +264,54 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   // Drive read address channel
   task drive_ar_channel();
     axi4_transaction trans;
-    axi4_transaction split_trans[$];
 
     forever begin
-      seq_item_port.try_next_item(trans);
-      if (trans == null) begin
+      @(m_vif.m_cb);
+
+      if (m_ar_pending.size() > 0) begin
+        trans = m_ar_pending.pop_front();
+
+        m_vif.m_cb.arid <= trans.m_id;
+        m_vif.m_cb.araddr <= trans.m_addr;
+        m_vif.m_cb.arlen <= trans.m_len;
+        m_vif.m_cb.arsize <= trans.m_size;
+        m_vif.m_cb.arburst <= trans.m_burst;
+        m_vif.m_cb.arlock <= trans.m_lock;
+        m_vif.m_cb.arcache <= trans.m_cache;
+        m_vif.m_cb.arprot <= trans.m_prot;
+        m_vif.m_cb.arqos <= trans.m_qos;
+        m_vif.m_cb.arregion <= trans.m_region;
+        m_vif.m_cb.aruser <= trans.m_user;
+        m_vif.m_cb.arvalid <= 1'b1;
+
         @(m_vif.m_cb);
-        continue;
-      end
-
-      if (trans.m_trans_type == READ) begin
-        split_transaction(trans, split_trans);
-
-        for (int i = 0; i < split_trans.size(); i++) begin
-          axi4_transaction split = split_trans[i];
-
-          m_vif.m_cb.arid <= split.m_id;
-          m_vif.m_cb.araddr <= split.m_addr;
-          m_vif.m_cb.arlen <= split.m_len;
-          m_vif.m_cb.arsize <= split.m_size;
-          m_vif.m_cb.arburst <= split.m_burst;
-          m_vif.m_cb.arlock <= split.m_lock;
-          m_vif.m_cb.arcache <= split.m_cache;
-          m_vif.m_cb.arprot <= split.m_prot;
-          m_vif.m_cb.arqos <= split.m_qos;
-          m_vif.m_cb.arregion <= split.m_region;
-          m_vif.m_cb.aruser <= split.m_user;
-          m_vif.m_cb.arvalid <= 1'b1;
-
+        while (!m_vif.m_cb.arready) begin
           @(m_vif.m_cb);
-          while (!m_vif.m_cb.arready) begin
-            @(m_vif.m_cb);
-          end
+        end
 
-          split.m_addr_accept_time = $time;
-          m_vif.m_cb.arvalid <= 1'b0;
-          m_ar_queue.push_back(split);
+        trans.m_addr_accept_time = $time;
+        m_vif.m_cb.arvalid <= 1'b0;
 
-          for (int j = 0; j < m_trans_interval; j++) begin
-            @(m_vif.m_cb);
-          end
+        // Transaction interval
+        for (int j = 0; j < m_trans_interval; j++) begin
+          @(m_vif.m_cb);
         end
       end
-
-      seq_item_port.item_done();
     end
   endtask
 
-  // Drive read data channel
+  // Drive read data channel (receive)
   task drive_r_channel();
-    int rid;
-    axi4_transaction trans;
+    logic [31:0] rid;
 
     forever begin
       @(m_vif.m_cb);
 
       m_vif.m_cb.rready <= 1'b1;
 
-      if (m_vif.m_cb.rvalid) begin
+      if (m_vif.m_cb.rvalid && m_vif.m_cb.rlast) begin
+        // Read transaction completed
         rid = m_vif.m_cb.rid;
-
-        // Find matching transaction by ID
-        foreach (m_ar_queue[i]) begin
-          if (m_ar_queue[i].m_id == rid) begin
-            trans = m_ar_queue[i];
-
-            // Collect read data
-            trans.m_data.push_back(m_vif.m_cb.rdata);
-            trans.m_resp.push_back(axi4_resp_t'(m_vif.m_cb.rresp));
-            trans.m_ruser.push_back(m_vif.m_cb.ruser);
-
-            if (m_vif.m_cb.rlast) begin
-              trans.m_resp_accept_time = $time;
-              m_ar_queue.delete(i);
-            end
-            break;
-          end
-        end
       end
     end
   endtask
