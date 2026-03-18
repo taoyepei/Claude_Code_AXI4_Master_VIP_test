@@ -127,7 +127,7 @@ class axi4_monitor extends uvm_monitor;
         // For simplicity, we use the most recent AW as the W owner
         if (m_aw_trans.size() > 0) begin
           // Get first pending AW (simplified matching)
-          current_wid = m_aw_trans.first();
+          void'(m_aw_trans.first(current_wid));
           m_wlast_time[current_wid] = $time;
         end
       end
