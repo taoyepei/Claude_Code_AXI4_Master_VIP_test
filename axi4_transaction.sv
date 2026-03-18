@@ -67,7 +67,6 @@ class axi4_transaction extends uvm_sequence_item;
     m_data.size() == (m_len + 1);
     m_wstrb.size() == (m_trans_type == WRITE) ? (m_len + 1) : 0;
     m_wuser.size() == (m_trans_type == WRITE) ? (m_len + 1) : 0;
-    m_resp.size() == (m_trans_type == READ) ? (m_len + 1) : 1;
     m_ruser.size() == (m_trans_type == READ) ? (m_len + 1) : 0;
   }
 

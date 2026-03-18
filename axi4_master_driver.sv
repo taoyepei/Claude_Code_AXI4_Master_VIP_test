@@ -199,13 +199,8 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
         // Track for write completion
         m_b_pending[trans.m_id] = trans;
 
-        // Queue for W channel if data_before_addr enabled
-        if (m_cfg.m_support_data_before_addr) begin
-          m_w_queue.push_back(trans);
-        end else begin
-          // Wait for W channel to request data
-          m_w_queue.push_back(trans);
-        end
+        // Queue for W channel
+        m_w_queue.push_back(trans);
 
         // Transaction interval
         for (int j = 0; j < m_trans_interval; j++) begin
@@ -218,29 +213,55 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   // Drive write data channel
   task drive_w_channel();
     axi4_transaction trans;
+    int w_count;
 
     forever begin
       @(m_vif.m_cb);
 
       if (m_w_queue.size() > 0) begin
-        // Check if allowed to send data before address
-        if (!m_cfg.m_support_data_before_addr || m_b_pending.size() > 0) begin
-          trans = m_w_queue.pop_front();
+        // Check data_before_addr_osd limit
+        w_count = m_b_pending.size();
 
-          for (int beat = 0; beat <= trans.m_len; beat++) begin
-            m_vif.m_cb.wdata <= trans.m_data[beat];
-            m_vif.m_cb.wstrb <= trans.m_wstrb[beat];
-            m_vif.m_cb.wlast <= (beat == trans.m_len);
-            m_vif.m_cb.wvalid <= 1'b1;
+        if (!m_cfg.m_support_data_before_addr) begin
+          // Normal mode: need address first (aw has been sent, in m_b_pending)
+          if (w_count > 0) begin
+            trans = m_w_queue.pop_front();
 
-            @(m_vif.m_cb);
-            while (!m_vif.m_cb.wready) begin
+            for (int beat = 0; beat <= trans.m_len; beat++) begin
+              m_vif.m_cb.wdata <= trans.m_data[beat];
+              m_vif.m_cb.wstrb <= trans.m_wstrb[beat];
+              m_vif.m_cb.wlast <= (beat == trans.m_len);
+              m_vif.m_cb.wvalid <= 1'b1;
+
               @(m_vif.m_cb);
+              while (!m_vif.m_cb.wready) begin
+                @(m_vif.m_cb);
+              end
             end
-          end
 
-          trans.m_data_complete_time = $time;
-          m_vif.m_cb.wvalid <= 1'b0;
+            trans.m_data_complete_time = $time;
+            m_vif.m_cb.wvalid <= 1'b0;
+          end
+        end else begin
+          // Data before addr mode: check osd limit
+          if (w_count <= m_cfg.m_data_before_addr_osd) begin
+            trans = m_w_queue.pop_front();
+
+            for (int beat = 0; beat <= trans.m_len; beat++) begin
+              m_vif.m_cb.wdata <= trans.m_data[beat];
+              m_vif.m_cb.wstrb <= trans.m_wstrb[beat];
+              m_vif.m_cb.wlast <= (beat == trans.m_len);
+              m_vif.m_cb.wvalid <= 1'b1;
+
+              @(m_vif.m_cb);
+              while (!m_vif.m_cb.wready) begin
+                @(m_vif.m_cb);
+              end
+            end
+
+            trans.m_data_complete_time = $time;
+            m_vif.m_cb.wvalid <= 1'b0;
+          end
         end
       end
     end

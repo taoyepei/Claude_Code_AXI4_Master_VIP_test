@@ -37,6 +37,14 @@ class axi4_sequence extends uvm_sequence #(axi4_transaction);
     `uvm_info(get_type_name(), $sformatf("Starting sequence: %s", get_name()), UVM_LOW)
   endfunction
 
+  task pre_body();
+    super.pre_body();
+    if (starting_phase != null) begin
+      starting_phase.raise_objection(this, get_type_name());
+      starting_phase.get_objection().set_propagate_mode(0);
+    end
+  endtask
+
   task body();
     axi4_transaction trans;
     int i;
@@ -58,6 +66,13 @@ class axi4_sequence extends uvm_sequence #(axi4_transaction);
 
       start_item(trans);
       finish_item(trans);
+    end
+  endtask
+
+  task post_body();
+    super.post_body();
+    if (starting_phase != null) begin
+      starting_phase.drop_objection(this, get_type_name());
     end
   endtask
 

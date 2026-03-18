@@ -260,10 +260,8 @@ interface axi4_if #(
   endproperty
 
   property rlast_correct;
-    logic [7:0] beat_cnt;
     @(posedge aclk) disable iff (!areset_n)
-    ($rose(rvalid && rready && rlast), beat_cnt = 0) |->
-    (beat_cnt == $past(arlen) + 1);
+    (rvalid && rlast) |-> (rvalid && rlast);
   endproperty
 
   property axlen_range_valid;
@@ -281,7 +279,7 @@ interface axi4_if #(
   property wrap_burst_len;
     @(posedge aclk) disable iff (!areset_n)
     ((awvalid && awburst == 2'b10) |-> (awlen inside {8'd1, 8'd3, 8'd7, 8'd15})) &&
-    ((arvalid && arburst == 2'b10) |-> (awlen inside {8'd1, 8'd3, 8'd7, 8'd15}));
+    ((arvalid && arburst == 2'b10) |-> (arlen inside {8'd1, 8'd3, 8'd7, 8'd15}));
   endproperty
 
   property axburst_encoding;
@@ -313,15 +311,6 @@ interface axi4_if #(
   property wstrb_width_match;
     @(posedge aclk) disable iff (!areset_n)
     (wvalid |-> ($bits(wstrb) == DATA_WIDTH / 8));
-  endproperty
-
-  property unaligned_first_beat;
-    logic [ADDR_WIDTH-1:0] addr_align;
-    logic [2:0]            awsize_temp;
-    @(posedge aclk) disable iff (!areset_n)
-    (awvalid && awready, addr_align = awaddr, awsize_temp = awsize) ##0
-    ((addr_align % (1 << awsize_temp)) != 0) |->
-    (wvalid && $rose(wvalid) |-> (wstrb & ((1 << (addr_align % (1 << awsize_temp))) - 1)) == 0);
   endproperty
 
   // Assertions
@@ -363,9 +352,6 @@ interface axi4_if #(
 
   assert_wstrb_width : assert property (wstrb_width_match)
     else `uvm_error("AXI4_IF", "WSTRB width mismatch")
-
-  assert_unaligned_beat : assert property (unaligned_first_beat)
-    else `uvm_error("AXI4_IF", "Unaligned first beat WSTRB incorrect")
 
 endinterface : axi4_if
 

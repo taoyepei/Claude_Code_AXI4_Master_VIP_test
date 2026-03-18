@@ -17,7 +17,9 @@ class axi4_monitor extends uvm_monitor;
   // Transaction tracking
   axi4_transaction m_aw_trans[logic [31:0]];
   axi4_transaction m_ar_trans[logic [31:0]];
-  axi4_transaction m_w_trans[logic [31:0]];
+
+  // WLAST tracking for write latency
+  time               m_wlast_time[logic [31:0]];
 
   // Statistics
   int                m_total_trans_count;
@@ -112,18 +114,19 @@ class axi4_monitor extends uvm_monitor;
 
   // Monitor write data channel
   task monitor_w_channel();
-    logic [31:0] current_id;
-    int          beat_count;
+    logic [31:0] current_wid;
 
     forever begin
       @(m_vif.mon_cb);
 
-      if (m_vif.mon_cb.wvalid && m_vif.mon_cb.wready) begin
-        // Track write data
-        if (m_w_trans.exists(current_id)) begin
-          m_w_trans[current_id].m_data.push_back(m_vif.mon_cb.wdata);
-          m_w_trans[current_id].m_wstrb.push_back(m_vif.mon_cb.wstrb);
-          m_w_trans[current_id].m_wuser.push_back(m_vif.mon_cb.wuser);
+      if (m_vif.mon_cb.wvalid && m_vif.mon_cb.wready && m_vif.mon_cb.wlast) begin
+        // Find matching AW transaction by tracking W channel
+        // Note: In real AXI, W channel doesn't have ID, need to match by order
+        // For simplicity, we use the most recent AW as the W owner
+        if (m_aw_trans.size() > 0) begin
+          // Get first pending AW (simplified matching)
+          current_wid = m_aw_trans.first();
+          m_wlast_time[current_wid] = $time;
         end
       end
     end
@@ -133,6 +136,7 @@ class axi4_monitor extends uvm_monitor;
   task monitor_b_channel();
     axi4_transaction trans;
     time             latency;
+    time             wlast_time;
 
     forever begin
       @(m_vif.mon_cb);
@@ -144,7 +148,13 @@ class axi4_monitor extends uvm_monitor;
           trans.m_buser = m_vif.mon_cb.buser;
 
           // Calculate write latency (AW handshake to WLAST)
-          latency = trans.m_data_complete_time - trans.m_addr_accept_time;
+          if (m_wlast_time.exists(m_vif.mon_cb.bid)) begin
+            wlast_time = m_wlast_time[m_vif.mon_cb.bid];
+            latency = wlast_time - trans.m_addr_accept_time;
+            m_wlast_time.delete(m_vif.mon_cb.bid);
+          end else begin
+            latency = 0;
+          end
 
           if (latency > m_max_write_latency) begin
             m_max_write_latency = latency;
@@ -251,7 +261,7 @@ class axi4_monitor extends uvm_monitor;
       @(m_vif.mon_cb);
       current_time = $time;
 
-      // Check write timeout
+      // Check write timeout (AW to BVALID)
       foreach (m_aw_accept_time[id]) begin
         if ((current_time - m_aw_accept_time[id]) > m_cfg.m_wtimeout) begin
           `uvm_warning(get_type_name(),
@@ -260,7 +270,7 @@ class axi4_monitor extends uvm_monitor;
         end
       end
 
-      // Check read timeout
+      // Check read timeout (AR to RLAST)
       foreach (m_ar_accept_time[id]) begin
         if ((current_time - m_ar_accept_time[id]) > m_cfg.m_rtimeout) begin
           `uvm_warning(get_type_name(),
