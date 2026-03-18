@@ -3,6 +3,8 @@
 
 `include "axi4_pkg.sv"
 
+import axi4_pkg::*;
+
 class axi4_transaction extends uvm_sequence_item;
   `uvm_object_utils(axi4_transaction)
 

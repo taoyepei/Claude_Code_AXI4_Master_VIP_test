@@ -5,6 +5,8 @@
 `include "axi4_transaction.sv"
 `include "axi4_if.sv"
 
+import axi4_pkg::*;
+
 class axi4_monitor extends uvm_monitor;
   `uvm_component_utils(axi4_monitor)
 
