@@ -17,7 +17,6 @@ AXI4 Master VIP (Verification IP) for UVM-based verification environments.
 | `axi4_master_agent.sv` | Agent containing driver, sequencer, and monitor |
 | `axi4_env.sv` | Top-level environment class |
 | `files.f` | File list for compilation |
-| `tb_top.sv` | Complete testbench example with sample slave DUT |
 
 ## Configuration Options
 
@@ -56,40 +55,12 @@ To change bus widths, edit `axi4_defines.svh`:
 `define AXI4_USER_WIDTH      1
 ```
 
-## Quick Start
+## Usage Example
 
-### Step 1: Set Environment Variable
-
-```bash
-# Windows
-set AI_GEN_AXI4_VIP_PATH=C:\path\to\vip
-
-# Linux
-export AI_GEN_AXI4_VIP_PATH=/path/to/vip
-```
-
-### Step 2: Compile and Run
-
-```bash
-# Using VCS
-vcs -sverilog -ntb_opts uvm-1.2 -f files.f tb_top.sv +incdir+.
-./simv
-
-# Using Xcelium
-xrun -sv -uvm -f files.f tb_top.sv
-
-# Using Questa
-vlib work
-vlog -sv -f files.f tb_top.sv +incdir+.
-vsim -c -do "run -all" tb_top
-```
-
-## Integration Guide
-
-### 1. Basic Integration (Connect to Your DUT)
+### 1. Basic Testbench Structure
 
 ```systemverilog
-module your_tb;
+module tb_top;
   logic aclk;
   logic areset_n;
 
@@ -100,13 +71,24 @@ module your_tb;
   your_dut dut (
     .clk(aclk),
     .rst_n(areset_n),
-    // Connect AXI4 signals
     .awid(axi_if.awid),
     .awaddr(axi_if.awaddr),
-    // ... connect all other signals
+    // ... connect all other AXI4 signals
   );
 
-  // UVM test setup
+  // Clock generation
+  initial begin
+    aclk = 0;
+    forever #5 aclk = ~aclk;
+  end
+
+  // Reset generation
+  initial begin
+    areset_n = 0;
+    #100 areset_n = 1;
+  end
+
+  // UVM start
   initial begin
     uvm_config_db#(virtual axi4_if)::set(null, "*", "vif", axi_if);
     run_test("your_test");
@@ -114,7 +96,7 @@ module your_tb;
 endmodule
 ```
 
-### 2. Create Custom Test
+### 2. Custom Test
 
 ```systemverilog
 class my_test extends uvm_test;
@@ -131,7 +113,7 @@ class my_test extends uvm_test;
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
 
-    // Get interface
+    // Get interface from testbench
     if (!uvm_config_db#(virtual axi4_if)::get(this, "", "vif", m_vif))
       `uvm_fatal(get_type_name(), "No vif")
 
@@ -139,11 +121,11 @@ class my_test extends uvm_test;
     m_cfg = axi4_cfg::type_id::create("m_cfg");
     m_cfg.m_max_outstanding = 16;
 
-    // Set in config_db
+    // Set configuration and interface for env
     uvm_config_db#(axi4_cfg)::set(this, "m_env", "cfg", m_cfg);
     uvm_config_db#(virtual axi4_if)::set(this, "m_env", "vif", m_vif);
 
-    // Create env
+    // Create environment
     m_env = axi4_env::type_id::create("m_env", this);
   endfunction
 
@@ -160,7 +142,7 @@ class my_test extends uvm_test;
       m_max_len == 15;
     };
 
-    // Start sequence
+    // Start sequence on agent's sequencer
     seq.start(m_env.m_master_agent.m_sequencer);
 
     phase.drop_objection(this);
@@ -168,7 +150,23 @@ class my_test extends uvm_test;
 endclass
 ```
 
-### 3. Config Database Hierarchy
+### 3. Compilation
+
+```bash
+# Set environment variable
+export AI_GEN_AXI4_VIP_PATH=/path/to/vip
+
+# Using VCS
+vcs -sverilog -ntb_opts uvm-1.2 -f files.f +incdir+. your_tb.sv
+
+# Using Xcelium
+xrun -sv -uvm -f files.f your_tb.sv
+
+# Using Questa
+vlog -sv -f files.f your_tb.sv +incdir+.
+```
+
+### 4. Config Database Hierarchy
 
 ```
 test (uvm_config_db::set cfg, vif)
@@ -189,18 +187,28 @@ test (uvm_config_db::set cfg, vif)
 - **Timeout Detection**: Configurable timeout warnings for stuck transactions
 - **SVA Assertions**: 12 protocol assertions checking AXI4 compliance
 
-## Protocol Compliance
+## SVA Assertions
 
-The VIP implements the following AXI4 features:
-- All burst types (FIXED/INCR/WRAP) with correct length restrictions
-- Unaligned transfer support via WSTRB
-- All optional signals (CACHE, PROT, LOCK, QOS, REGION, USER)
-- Outstanding transaction handling
-- Out-of-order read data support (by ID matching)
+| # | Assertion | Description |
+|---|-----------|-------------|
+| 1 | awvalid_stable | AWVALID must stay high until AWREADY is asserted (checked on next cycle using \|=\>) |
+| 2 | arvalid_stable | ARVALID must stay high until ARREADY is asserted |
+| 3 | wvalid_stable | WVALID must stay high until WREADY is asserted |
+| 4 | wlast_correct | WLAST asserted at correct beat (ARLEN+1) |
+| 5 | rlast_correct | RLAST detection check |
+| 6 | axlen_range_aw/ar | AWLEN/ARLEN within 0-255 range |
+| 7 | fixed_burst_len_aw/ar | FIXED burst length <= 16 |
+| 8 | wrap_burst_len_aw/ar | WRAP burst length must be 2,4,8,16 |
+| 9 | axburst_encoding_aw/ar | BURST encoding not reserved (2'b11) |
+| 10 | axsize_range_aw/ar | Size not exceeding data width |
+| 11 | wdata_stable | WDATA/WSTRB/WLAST stable during handshake |
+| 12 | ardata_stable | AR channel signals stable until ARREADY |
+| 13 | wstrb_width_match | WSTRB width equals DATA_WIDTH/8 |
 
 ## Important Notes
 
-1. **Bus Width Configuration**: Always modify `axi4_defines.svh` to change bus widths, not the interface parameters
+1. **Bus Width Configuration**: Always modify `axi4_defines.svh` to change bus widths
 2. **Reset Behavior**: Driver waits for `areset_n` to go high before driving any signals
 3. **Signal Initialization**: All driven signals are initialized to 0 during reset
-4. **Config DB**: Must set both `cfg` and `vif` in config_db at each level
+4. **Config DB**: Must set both `cfg` and `vif` in config_db at each level (test → env → agent → driver/monitor)
+5. **B Channel Response**: VIP only drives `bready`. `bid`, `bresp`, `buser` are driven by Slave DUT
