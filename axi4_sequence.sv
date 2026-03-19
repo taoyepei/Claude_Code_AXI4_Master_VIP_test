@@ -1,7 +1,11 @@
 `ifndef AXI4_SEQUENCE_SV
 `define AXI4_SEQUENCE_SV
 
+`include "axi4_pkg.sv"
 `include "axi4_transaction.sv"
+
+import uvm_pkg::*;
+import axi4_pkg::*;
 
 class axi4_sequence extends uvm_sequence #(axi4_transaction);
   `uvm_object_utils(axi4_sequence)

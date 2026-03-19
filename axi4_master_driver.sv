@@ -5,6 +5,8 @@
 `include "axi4_transaction.sv"
 `include "axi4_if.sv"
 
+import uvm_pkg::*;
+
 class axi4_master_driver extends uvm_driver #(axi4_transaction);
   `uvm_component_utils(axi4_master_driver)
 
@@ -25,10 +27,14 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   // Timing control
   int m_trans_interval;
 
+  // Reset done flag
+  bit m_reset_done;
+
   function new(string name = "axi4_master_driver", uvm_component parent);
     super.new(name, parent);
     m_next_split_id = 0;
     m_trans_interval = 0;
+    m_reset_done = 0;
   endfunction
 
   function void build_phase(uvm_phase phase);
@@ -36,17 +42,20 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     `uvm_info(get_type_name(), $sformatf("Building driver: %s", get_name()), UVM_HIGH)
 
     if (!uvm_config_db#(virtual axi4_if)::get(this, "", "vif", m_vif)) begin
-      `uvm_fatal(get_type_name(), "Virtual interface not found in config_db")
+      `uvm_fatal(get_type_name(), "Virtual interface not found in config_db. Ensure uvm_config_db#(virtual axi4_if)::set() is called in agent/env/test.")
     end
 
     if (!uvm_config_db#(axi4_cfg)::get(this, "", "cfg", m_cfg)) begin
-      `uvm_fatal(get_type_name(), "Configuration not found in config_db")
+      `uvm_fatal(get_type_name(), "Configuration not found in config_db. Ensure uvm_config_db#(axi4_cfg)::set() is called in agent/env/test.")
     end
 
     m_trans_interval = m_cfg.m_trans_interval;
   endfunction
 
   task run_phase(uvm_phase phase);
+    // Wait for reset to be released first
+    wait_for_reset();
+
     fork
       get_and_drive();
       drive_aw_channel();
@@ -54,8 +63,80 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       drive_b_channel();
       drive_ar_channel();
       drive_r_channel();
+      reset_monitor();
     join
   endtask
+
+  // Wait for reset to be released before driving signals
+  task wait_for_reset();
+    `uvm_info(get_type_name(), "Waiting for reset release...", UVM_LOW)
+    @(posedge m_vif.aclk);
+    while (!m_vif.areset_n) begin
+      @(posedge m_vif.aclk);
+    end
+    m_reset_done = 1;
+    `uvm_info(get_type_name(), "Reset released, starting driver operation", UVM_LOW)
+  endtask
+
+  // Monitor reset and drive initial values
+  task reset_monitor();
+    forever begin
+      @(negedge m_vif.areset_n);
+      m_reset_done = 0;
+      `uvm_info(get_type_name(), "Reset detected, driving signals to reset values", UVM_LOW)
+      drive_reset_values();
+
+      // Wait for reset release
+      @(posedge m_vif.areset_n);
+      @(posedge m_vif.aclk);
+      m_reset_done = 1;
+      `uvm_info(get_type_name(), "Reset released, resuming driver operation", UVM_LOW)
+    end
+  endtask
+
+  // Drive all signals to reset values
+  function void drive_reset_values();
+    // Write address channel
+    m_vif.m_cb.awid   <= '0;
+    m_vif.m_cb.awaddr <= '0;
+    m_vif.m_cb.awlen  <= '0;
+    m_vif.m_cb.awsize <= '0;
+    m_vif.m_cb.awburst <= '0;
+    m_vif.m_cb.awlock <= '0;
+    m_vif.m_cb.awcache <= '0;
+    m_vif.m_cb.awprot <= '0;
+    m_vif.m_cb.awqos <= '0;
+    m_vif.m_cb.awregion <= '0;
+    m_vif.m_cb.awuser <= '0;
+    m_vif.m_cb.awvalid <= 1'b0;
+
+    // Write data channel
+    m_vif.m_cb.wdata <= '0;
+    m_vif.m_cb.wstrb <= '0;
+    m_vif.m_cb.wlast <= 1'b0;
+    m_vif.m_cb.wuser <= '0;
+    m_vif.m_cb.wvalid <= 1'b0;
+
+    // Write response channel
+    m_vif.m_cb.bready <= 1'b0;
+
+    // Read address channel
+    m_vif.m_cb.arid   <= '0;
+    m_vif.m_cb.araddr <= '0;
+    m_vif.m_cb.arlen  <= '0;
+    m_vif.m_cb.arsize <= '0;
+    m_vif.m_cb.arburst <= '0;
+    m_vif.m_cb.arlock <= '0;
+    m_vif.m_cb.arcache <= '0;
+    m_vif.m_cb.arprot <= '0;
+    m_vif.m_cb.arqos <= '0;
+    m_vif.m_cb.arregion <= '0;
+    m_vif.m_cb.aruser <= '0;
+    m_vif.m_cb.arvalid <= 1'b0;
+
+    // Read data channel
+    m_vif.m_cb.rready <= 1'b0;
+  endfunction
 
   // Get transactions from sequencer and split if needed
   task get_and_drive();
@@ -63,6 +144,9 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     axi4_transaction split_trans[$];
 
     forever begin
+      // Wait for reset to be done
+      wait(m_reset_done);
+
       seq_item_port.get_next_item(trans);
 
       split_transaction(trans, split_trans);
@@ -73,13 +157,17 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
           // Wait if max outstanding reached
           while (m_aw_pending.size() >= m_cfg.m_max_outstanding) begin
             @(m_vif.m_cb);
+            if (!m_reset_done) break;
           end
+          if (!m_reset_done) break;
           m_aw_pending.push_back(split_trans[i]);
         end else begin
           // Read transaction
           while (m_ar_pending.size() >= m_cfg.m_max_outstanding) begin
             @(m_vif.m_cb);
+            if (!m_reset_done) break;
           end
+          if (!m_reset_done) break;
           m_ar_pending.push_back(split_trans[i]);
         end
       end
@@ -172,6 +260,9 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     forever begin
       @(m_vif.m_cb);
 
+      // Skip if reset not done
+      if (!m_reset_done) continue;
+
       if (m_aw_pending.size() > 0) begin
         trans = m_aw_pending.pop_front();
 
@@ -189,8 +280,13 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
         m_vif.m_cb.awvalid <= 1'b1;
 
         @(m_vif.m_cb);
-        while (!m_vif.m_cb.awready) begin
+        while (!m_vif.m_cb.awready && m_reset_done) begin
           @(m_vif.m_cb);
+        end
+
+        if (!m_reset_done) begin
+          m_vif.m_cb.awvalid <= 1'b0;
+          continue;
         end
 
         trans.m_addr_accept_time = $time;
@@ -203,7 +299,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
         m_w_queue.push_back(trans);
 
         // Transaction interval
-        for (int j = 0; j < m_trans_interval; j++) begin
+        for (int j = 0; j < m_trans_interval && m_reset_done; j++) begin
           @(m_vif.m_cb);
         end
       end
@@ -218,6 +314,9 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     forever begin
       @(m_vif.m_cb);
 
+      // Skip if reset not done
+      if (!m_reset_done) continue;
+
       if (m_w_queue.size() > 0) begin
         // Check data_before_addr_osd limit
         w_count = m_b_pending.size();
@@ -227,40 +326,48 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
           if (w_count > 0) begin
             trans = m_w_queue.pop_front();
 
-            for (int beat = 0; beat <= trans.m_len; beat++) begin
+            for (int beat = 0; beat <= trans.m_len && m_reset_done; beat++) begin
               m_vif.m_cb.wdata <= trans.m_data[beat];
               m_vif.m_cb.wstrb <= trans.m_wstrb[beat];
               m_vif.m_cb.wlast <= (beat == trans.m_len);
               m_vif.m_cb.wvalid <= 1'b1;
 
               @(m_vif.m_cb);
-              while (!m_vif.m_cb.wready) begin
+              while (!m_vif.m_cb.wready && m_reset_done) begin
                 @(m_vif.m_cb);
               end
+              if (!m_reset_done) break;
             end
 
-            trans.m_data_complete_time = $time;
+            if (m_reset_done) begin
+              trans.m_data_complete_time = $time;
+            end
             m_vif.m_cb.wvalid <= 1'b0;
+            m_vif.m_cb.wlast <= 1'b0;
           end
         end else begin
           // Data before addr mode: check osd limit
           if (w_count <= m_cfg.m_data_before_addr_osd) begin
             trans = m_w_queue.pop_front();
 
-            for (int beat = 0; beat <= trans.m_len; beat++) begin
+            for (int beat = 0; beat <= trans.m_len && m_reset_done; beat++) begin
               m_vif.m_cb.wdata <= trans.m_data[beat];
               m_vif.m_cb.wstrb <= trans.m_wstrb[beat];
               m_vif.m_cb.wlast <= (beat == trans.m_len);
               m_vif.m_cb.wvalid <= 1'b1;
 
               @(m_vif.m_cb);
-              while (!m_vif.m_cb.wready) begin
+              while (!m_vif.m_cb.wready && m_reset_done) begin
                 @(m_vif.m_cb);
               end
+              if (!m_reset_done) break;
             end
 
-            trans.m_data_complete_time = $time;
+            if (m_reset_done) begin
+              trans.m_data_complete_time = $time;
+            end
             m_vif.m_cb.wvalid <= 1'b0;
+            m_vif.m_cb.wlast <= 1'b0;
           end
         end
       end
@@ -271,6 +378,12 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   task drive_b_channel();
     forever begin
       @(m_vif.m_cb);
+
+      // Skip if reset not done
+      if (!m_reset_done) begin
+        m_vif.m_cb.bready <= 1'b0;
+        continue;
+      end
 
       m_vif.m_cb.bready <= 1'b1;
 
@@ -289,6 +402,9 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     forever begin
       @(m_vif.m_cb);
 
+      // Skip if reset not done
+      if (!m_reset_done) continue;
+
       if (m_ar_pending.size() > 0) begin
         trans = m_ar_pending.pop_front();
 
@@ -306,15 +422,20 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
         m_vif.m_cb.arvalid <= 1'b1;
 
         @(m_vif.m_cb);
-        while (!m_vif.m_cb.arready) begin
+        while (!m_vif.m_cb.arready && m_reset_done) begin
           @(m_vif.m_cb);
+        end
+
+        if (!m_reset_done) begin
+          m_vif.m_cb.arvalid <= 1'b0;
+          continue;
         end
 
         trans.m_addr_accept_time = $time;
         m_vif.m_cb.arvalid <= 1'b0;
 
         // Transaction interval
-        for (int j = 0; j < m_trans_interval; j++) begin
+        for (int j = 0; j < m_trans_interval && m_reset_done; j++) begin
           @(m_vif.m_cb);
         end
       end
@@ -327,6 +448,12 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
     forever begin
       @(m_vif.m_cb);
+
+      // Skip if reset not done
+      if (!m_reset_done) begin
+        m_vif.m_cb.rready <= 1'b0;
+        continue;
+      end
 
       m_vif.m_cb.rready <= 1'b1;
 

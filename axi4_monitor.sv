@@ -5,6 +5,7 @@
 `include "axi4_transaction.sv"
 `include "axi4_if.sv"
 
+import uvm_pkg::*;
 import axi4_pkg::*;
 
 class axi4_monitor extends uvm_monitor;
@@ -66,11 +67,11 @@ class axi4_monitor extends uvm_monitor;
     `uvm_info(get_type_name(), $sformatf("Building monitor: %s", get_name()), UVM_HIGH)
 
     if (!uvm_config_db#(virtual axi4_if)::get(this, "", "vif", m_vif)) begin
-      `uvm_fatal(get_type_name(), "Virtual interface not found in config_db")
+      `uvm_fatal(get_type_name(), "Virtual interface not found in config_db. Ensure uvm_config_db#(virtual axi4_if)::set() is called in agent/env/test.")
     end
 
     if (!uvm_config_db#(axi4_cfg)::get(this, "", "cfg", m_cfg)) begin
-      `uvm_fatal(get_type_name(), "Configuration not found in config_db")
+      `uvm_fatal(get_type_name(), "Configuration not found in config_db. Ensure uvm_config_db#(axi4_cfg)::set() is called in agent/env/test.")
     end
   endfunction
 

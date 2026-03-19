@@ -5,11 +5,16 @@
 `include "axi4_master_agent.sv"
 `include "axi4_if.sv"
 
+import uvm_pkg::*;
+
 class axi4_env extends uvm_env;
   `uvm_component_utils(axi4_env)
 
   axi4_master_agent m_master_agent;
   axi4_cfg          m_cfg;
+
+  // Virtual interface handle for setting to children
+  virtual axi4_if   m_vif;
 
   function new(string name = "axi4_env", uvm_component parent);
     super.new(name, parent);
@@ -19,12 +24,22 @@ class axi4_env extends uvm_env;
     super.build_phase(phase);
     `uvm_info(get_type_name(), $sformatf("Building environment: %s", get_name()), UVM_HIGH)
 
+    // Get configuration from test
     if (!uvm_config_db#(axi4_cfg)::get(this, "", "cfg", m_cfg)) begin
       `uvm_info(get_type_name(), "Using default configuration", UVM_MEDIUM)
       m_cfg = axi4_cfg::type_id::create("m_cfg");
     end
 
+    // Get virtual interface from test
+    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "vif", m_vif)) begin
+      `uvm_fatal(get_type_name(), "Virtual interface not found in config_db. Ensure uvm_config_db#(virtual axi4_if)::set() is called in test.")
+    end
+
+    // Pass configuration and interface to agent
     uvm_config_db#(axi4_cfg)::set(this, "m_master_agent", "cfg", m_cfg);
+    uvm_config_db#(virtual axi4_if)::set(this, "m_master_agent", "vif", m_vif);
+
+    // Create agent
     m_master_agent = axi4_master_agent::type_id::create("m_master_agent", this);
   endfunction
 

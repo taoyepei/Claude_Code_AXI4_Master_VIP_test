@@ -8,6 +8,8 @@
 `include "axi4_monitor.sv"
 `include "axi4_if.sv"
 
+import uvm_pkg::*;
+
 class axi4_master_agent extends uvm_agent;
   `uvm_component_utils(axi4_master_agent)
 
@@ -16,6 +18,7 @@ class axi4_master_agent extends uvm_agent;
   axi4_monitor        m_monitor;
 
   axi4_cfg            m_cfg;
+  virtual axi4_if     m_vif;
   bit                 m_is_active;
 
   function new(string name = "axi4_master_agent", uvm_component parent);
@@ -27,18 +30,29 @@ class axi4_master_agent extends uvm_agent;
     super.build_phase(phase);
     `uvm_info(get_type_name(), $sformatf("Building agent: %s", get_name()), UVM_HIGH)
 
+    // Get configuration from parent (env)
     if (!uvm_config_db#(axi4_cfg)::get(this, "", "cfg", m_cfg)) begin
-      `uvm_fatal(get_type_name(), "Configuration not found in config_db")
+      `uvm_fatal(get_type_name(), "Configuration not found in config_db. Ensure uvm_config_db#(axi4_cfg)::set() is called in test/env.")
     end
 
-    uvm_config_db#(axi4_cfg)::set(this, "m_monitor", "cfg", m_cfg);
+    // Get virtual interface from parent (env)
+    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "vif", m_vif)) begin
+      `uvm_fatal(get_type_name(), "Virtual interface not found in config_db. Ensure uvm_config_db#(virtual axi4_if)::set() is called in test/env.")
+    end
 
+    // Pass configuration and interface to monitor
+    uvm_config_db#(axi4_cfg)::set(this, "m_monitor", "cfg", m_cfg);
+    uvm_config_db#(virtual axi4_if)::set(this, "m_monitor", "vif", m_vif);
+
+    // Create monitor
     m_monitor = axi4_monitor::type_id::create("m_monitor", this);
 
     if (m_is_active) begin
-      uvm_config_db#(axi4_cfg)::set(this, "m_sequencer", "cfg", m_cfg);
+      // Pass configuration and interface to driver
       uvm_config_db#(axi4_cfg)::set(this, "m_driver", "cfg", m_cfg);
+      uvm_config_db#(virtual axi4_if)::set(this, "m_driver", "vif", m_vif);
 
+      // Create driver and sequencer
       m_sequencer = axi4_sequencer::type_id::create("m_sequencer", this);
       m_driver = axi4_master_driver::type_id::create("m_driver", this);
     end

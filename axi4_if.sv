@@ -1,75 +1,68 @@
 `ifndef AXI4_IF_SV
 `define AXI4_IF_SV
 
+`include "axi4_defines.svh"
 `include "axi4_pkg.sv"
 
-interface axi4_if #(
-  parameter int DATA_WIDTH = 32,
-  parameter int ADDR_WIDTH = 32,
-  parameter int ID_WIDTH   = 4,
-  parameter int USER_WIDTH = 1
-)(
+interface axi4_if (
   input logic aclk,
   input logic areset_n
 );
 
-  // Calculate strobe width
-  localparam int STRB_WIDTH = DATA_WIDTH / 8;
-
   // Signal declarations - must be before clocking blocks
   // Write address channel
-  logic [ID_WIDTH-1:0]   awid;
-  logic [ADDR_WIDTH-1:0] awaddr;
-  logic [7:0]            awlen;
-  logic [2:0]            awsize;
-  logic [1:0]            awburst;
-  logic                  awlock;
-  logic [3:0]            awcache;
-  logic [2:0]            awprot;
-  logic [3:0]            awqos;
-  logic [3:0]            awregion;
-  logic [USER_WIDTH-1:0] awuser;
-  logic                  awvalid;
-  logic                  awready;
+  logic [`AXI4_ID_WIDTH-1:0]   awid;
+  logic [`AXI4_ADDR_WIDTH-1:0] awaddr;
+  logic [7:0]                  awlen;
+  logic [2:0]                  awsize;
+  logic [1:0]                  awburst;
+  logic                        awlock;
+  logic [3:0]                  awcache;
+  logic [2:0]                  awprot;
+  logic [3:0]                  awqos;
+  logic [3:0]                  awregion;
+  logic [`AXI4_USER_WIDTH-1:0] awuser;
+  logic                        awvalid;
+  logic                        awready;
 
   // Write data channel
-  logic [DATA_WIDTH-1:0] wdata;
-  logic [STRB_WIDTH-1:0] wstrb;
-  logic                  wlast;
-  logic [USER_WIDTH-1:0] wuser;
-  logic                  wvalid;
-  logic                  wready;
+  logic [`AXI4_DATA_WIDTH-1:0] wdata;
+  logic [`AXI4_STRB_WIDTH-1:0] wstrb;
+  logic                        wlast;
+  logic [`AXI4_USER_WIDTH-1:0] wuser;
+  logic                        wvalid;
+  logic                        wready;
 
   // Write response channel
-  logic [ID_WIDTH-1:0]   bid;
-  logic [1:0]            bresp;
-  logic [USER_WIDTH-1:0] buser;
-  logic                  bvalid;
-  logic                  bready;
+  logic [`AXI4_ID_WIDTH-1:0]   bid;
+  logic [1:0]                  bresp;
+  logic [`AXI4_USER_WIDTH-1:0] buser;
+  logic                        bvalid;
+  logic                        bready;
 
   // Read address channel
-  logic [ID_WIDTH-1:0]   arid;
-  logic [ADDR_WIDTH-1:0] araddr;
-  logic [7:0]            arlen;
-  logic [2:0]            arsize;
-  logic [1:0]            arburst;
-  logic                  arlock;
-  logic [3:0]            arcache;
-  logic [2:0]            arprot;
-  logic [3:0]            arqos;
-  logic [3:0]            arregion;
-  logic [USER_WIDTH-1:0] aruser;
-  logic                  arvalid;
-  logic                  arready;
+  logic [`AXI4_ID_WIDTH-1:0]   arid;
+  logic [`AXI4_ADDR_WIDTH-1:0] araddr;
+  logic [7:0]                  arlen;
+  logic [2:0]                  arsize;
+  logic [1:0]                  arburst;
+  logic                        arlock;
+  logic [3:0]                  arcache;
+  logic [2:0]                  arprot;
+  logic [3:0]                  arqos;
+  logic [3:0]                  arregion;
+  logic [`AXI4_USER_WIDTH-1:0] aruser;
+  logic                        arvalid;
+  logic                        arready;
 
   // Read data channel
-  logic [ID_WIDTH-1:0]   rid;
-  logic [DATA_WIDTH-1:0] rdata;
-  logic [1:0]            rresp;
-  logic                  rlast;
-  logic [USER_WIDTH-1:0] ruser;
-  logic                  rvalid;
-  logic                  rready;
+  logic [`AXI4_ID_WIDTH-1:0]   rid;
+  logic [`AXI4_DATA_WIDTH-1:0] rdata;
+  logic [1:0]                  rresp;
+  logic                        rlast;
+  logic [`AXI4_USER_WIDTH-1:0] ruser;
+  logic                        rvalid;
+  logic                        rready;
 
   // Clocking blocks - after signal declarations
   clocking m_cb @(posedge aclk);
@@ -307,12 +300,12 @@ interface axi4_if #(
 
   property axsize_range_aw;
     @(posedge aclk) disable iff (!areset_n)
-    (awvalid |-> ((1 << awsize) <= (DATA_WIDTH / 8)));
+    (awvalid |-> ((1 << awsize) <= (`AXI4_DATA_WIDTH / 8)));
   endproperty
 
   property axsize_range_ar;
     @(posedge aclk) disable iff (!areset_n)
-    (arvalid |-> ((1 << arsize) <= (DATA_WIDTH / 8)));
+    (arvalid |-> ((1 << arsize) <= (`AXI4_DATA_WIDTH / 8)));
   endproperty
 
   property wdata_stable;
@@ -331,7 +324,7 @@ interface axi4_if #(
 
   property wstrb_width_match;
     @(posedge aclk) disable iff (!areset_n)
-    (wvalid |-> ($bits(wstrb) == DATA_WIDTH / 8));
+    (wvalid |-> ($bits(wstrb) == `AXI4_DATA_WIDTH / 8));
   endproperty
 
   // Assertions

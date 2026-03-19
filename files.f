@@ -1,5 +1,6 @@
 +incdir+$AI_GEN_AXI4_VIP_PATH
 
+$AI_GEN_AXI4_VIP_PATH/axi4_defines.svh
 $AI_GEN_AXI4_VIP_PATH/axi4_pkg.sv
 $AI_GEN_AXI4_VIP_PATH/axi4_if.sv
 $AI_GEN_AXI4_VIP_PATH/axi4_transaction.sv

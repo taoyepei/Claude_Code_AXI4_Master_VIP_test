@@ -6,8 +6,9 @@ AXI4 Master VIP (Verification IP) for UVM-based verification environments.
 
 | File | Description |
 |------|-------------|
+| `axi4_defines.svh` | Macro definitions for data width, address width, ID width, etc. |
 | `axi4_pkg.sv` | Package definition including burst types, response types, and configuration class (`axi4_cfg`) |
-| `axi4_if.sv` | AXI4 interface with clocking blocks (m_cb/s_cb/mon_cb) and 12 SVA assertions |
+| `axi4_if.sv` | AXI4 interface with clocking blocks (m_cb/s_cb/mon_cb) and SVA assertions |
 | `axi4_transaction.sv` | Transaction class with address, data, response fields and timing info |
 | `axi4_sequence.sv` | Base sequence class for generating transactions |
 | `axi4_sequencer.sv` | UVM sequencer connecting sequence to driver |
@@ -16,6 +17,7 @@ AXI4 Master VIP (Verification IP) for UVM-based verification environments.
 | `axi4_master_agent.sv` | Agent containing driver, sequencer, and monitor |
 | `axi4_env.sv` | Top-level environment class |
 | `files.f` | File list for compilation |
+| `tb_top.sv` | Complete testbench example with sample slave DUT |
 
 ## Configuration Options
 
@@ -23,8 +25,8 @@ The VIP is configured through the `axi4_cfg` class:
 
 ```systemverilog
 class axi4_cfg extends uvm_object;
-  // Bus width parameters
-  int m_data_width;      // Data bus width (default: 32, supports 32/64/128/256/512/1024)
+  // Bus width parameters (must match `axi4_defines.svh` settings)
+  int m_data_width;      // Data bus width (default: 32, modify axi4_defines.svh for other widths)
   int m_addr_width;      // Address bus width (default: 32)
   int m_id_width;        // ID bus width (default: 4)
 
@@ -42,97 +44,106 @@ class axi4_cfg extends uvm_object;
 endclass
 ```
 
-### Configuration Examples
+### Modifying Bus Widths
+
+To change bus widths, edit `axi4_defines.svh`:
 
 ```systemverilog
-// Default configuration
-axi4_cfg cfg = axi4_cfg::type_id::create("cfg");
-
-// 64-bit data bus with 16 outstanding transactions
-cfg.m_data_width = 64;
-cfg.m_max_outstanding = 16;
-
-// Enable data-before-address mode
-cfg.m_support_data_before_addr = 1;
-cfg.m_data_before_addr_osd = 4;  // Allow 4 W beats before AW
-
-// Adjust timeout thresholds
-cfg.m_wtimeout = 500;
-cfg.m_rtimeout = 500;
+// Example: 64-bit data bus
+`define AXI4_DATA_WIDTH      64
+`define AXI4_ADDR_WIDTH      32
+`define AXI4_ID_WIDTH        8
+`define AXI4_USER_WIDTH      1
 ```
 
-## Usage Example
+## Quick Start
 
-### 1. Interface Instantiation
+### Step 1: Set Environment Variable
+
+```bash
+# Windows
+set AI_GEN_AXI4_VIP_PATH=C:\path\to\vip
+
+# Linux
+export AI_GEN_AXI4_VIP_PATH=/path/to/vip
+```
+
+### Step 2: Compile and Run
+
+```bash
+# Using VCS
+vcs -sverilog -ntb_opts uvm-1.2 -f files.f tb_top.sv +incdir+.
+./simv
+
+# Using Xcelium
+xrun -sv -uvm -f files.f tb_top.sv
+
+# Using Questa
+vlib work
+vlog -sv -f files.f tb_top.sv +incdir+.
+vsim -c -do "run -all" tb_top
+```
+
+## Integration Guide
+
+### 1. Basic Integration (Connect to Your DUT)
 
 ```systemverilog
-module tb_top;
+module your_tb;
   logic aclk;
   logic areset_n;
 
   // Instantiate AXI4 interface
-  axi4_if #(
-    .DATA_WIDTH(64),
-    .ADDR_WIDTH(32),
-    .ID_WIDTH(4),
-    .USER_WIDTH(1)
-  ) axi_if (.aclk(aclk), .areset_n(areset_n));
+  axi4_if axi_if (.aclk(aclk), .areset_n(areset_n));
 
-  // Clock generation
-  initial begin
-    aclk = 0;
-    forever #5 aclk = ~aclk;
-  end
-
-  // Reset generation
-  initial begin
-    areset_n = 0;
-    #100 areset_n = 1;
-  end
-
-  // DUT instantiation (example)
+  // Connect to your DUT
   your_dut dut (
-    .aclk(aclk),
-    .areset_n(areset_n),
-    // Connect to interface signals
+    .clk(aclk),
+    .rst_n(areset_n),
+    // Connect AXI4 signals
     .awid(axi_if.awid),
     .awaddr(axi_if.awaddr),
-    // ... other signals
+    // ... connect all other signals
   );
+
+  // UVM test setup
+  initial begin
+    uvm_config_db#(virtual axi4_if)::set(null, "*", "vif", axi_if);
+    run_test("your_test");
+  end
 endmodule
 ```
 
-### 2. UVM Testbench Setup
+### 2. Create Custom Test
 
 ```systemverilog
-class axi4_base_test extends uvm_test;
-  `uvm_component_utils(axi4_base_test)
+class my_test extends uvm_test;
+  `uvm_component_utils(my_test)
 
   axi4_env m_env;
   axi4_cfg m_cfg;
   virtual axi4_if m_vif;
 
-  function new(string name = "axi4_base_test", uvm_component parent);
+  function new(string name = "my_test", uvm_component parent);
     super.new(name, parent);
   endfunction
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
 
-    // Get virtual interface from config_db
+    // Get interface
     if (!uvm_config_db#(virtual axi4_if)::get(this, "", "vif", m_vif))
-      `uvm_fatal(get_type_name(), "Virtual interface not found")
+      `uvm_fatal(get_type_name(), "No vif")
 
-    // Create and configure VIP configuration
+    // Configure VIP
     m_cfg = axi4_cfg::type_id::create("m_cfg");
-    m_cfg.m_data_width = 64;
-    m_cfg.m_max_outstanding = 8;
+    m_cfg.m_max_outstanding = 16;
 
-    // Set configuration in config_db
-    uvm_config_db#(axi4_cfg)::set(this, "*", "cfg", m_cfg);
-    uvm_config_db#(virtual axi4_if)::set(this, "*", "vif", m_vif);
+    // Set in config_db
+    uvm_config_db#(axi4_cfg)::set(this, "m_env", "cfg", m_cfg);
+    uvm_config_db#(virtual axi4_if)::set(this, "m_env", "vif", m_vif);
 
-    // Create environment
+    // Create env
     m_env = axi4_env::type_id::create("m_env", this);
   endfunction
 
@@ -140,41 +151,31 @@ class axi4_base_test extends uvm_test;
     axi4_sequence seq = axi4_sequence::type_id::create("seq");
 
     phase.raise_objection(this);
-    seq.set_sequencer(m_env.m_master_agent.m_sequencer);
+
+    // Configure sequence
     seq.randomize() with {
-      m_num_transactions == 10;
-      m_default_trans_type == WRITE;
-      m_default_burst == INCR;
+      m_num_transactions == 20;
+      m_default_trans_type == READ;
       m_min_len == 0;
       m_max_len == 15;
     };
-    seq.start(null);
+
+    // Start sequence
+    seq.start(m_env.m_master_agent.m_sequencer);
+
     phase.drop_objection(this);
   endtask
 endclass
 ```
 
-### 3. Running the Test
+### 3. Config Database Hierarchy
 
-```systemverilog
-module top_tb;
-  // Interface and testbench setup as shown above
-
-  initial begin
-    // Set the test to run
-    uvm_config_db#(virtual axi4_if)::set(null, "*", "vif", axi_if);
-
-    // Start UVM phases
-    run_test("axi4_base_test");
-  end
-endmodule
 ```
-
-### 4. Compilation
-
-```bash
-# Using your favorite simulator (VCS/Xcelium/Questa)
-vcs -sverilog -ntb_opts uvm-1.2 -f files.f +incdir+. -top top_tb
+test (uvm_config_db::set cfg, vif)
+  └── env (gets cfg, vif from test)
+      └── agent (gets cfg, vif from env)
+          ├── monitor (gets cfg, vif from agent)
+          └── driver (gets cfg, vif from agent)
 ```
 
 ## Key Features
@@ -197,3 +198,9 @@ The VIP implements the following AXI4 features:
 - Outstanding transaction handling
 - Out-of-order read data support (by ID matching)
 
+## Important Notes
+
+1. **Bus Width Configuration**: Always modify `axi4_defines.svh` to change bus widths, not the interface parameters
+2. **Reset Behavior**: Driver waits for `areset_n` to go high before driving any signals
+3. **Signal Initialization**: All driven signals are initialized to 0 during reset
+4. **Config DB**: Must set both `cfg` and `vif` in config_db at each level
