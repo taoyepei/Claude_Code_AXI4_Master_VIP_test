@@ -330,6 +330,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
               m_vif.m_cb.wdata <= trans.m_data[beat];
               m_vif.m_cb.wstrb <= trans.m_wstrb[beat];
               m_vif.m_cb.wlast <= (beat == trans.m_len);
+              m_vif.m_cb.wuser <= trans.m_wuser[beat];
               m_vif.m_cb.wvalid <= 1'b1;
 
               @(m_vif.m_cb);
@@ -344,6 +345,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
             end
             m_vif.m_cb.wvalid <= 1'b0;
             m_vif.m_cb.wlast <= 1'b0;
+            m_vif.m_cb.wuser <= '0;
           end
         end else begin
           // Data before addr mode: check osd limit
@@ -354,6 +356,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
               m_vif.m_cb.wdata <= trans.m_data[beat];
               m_vif.m_cb.wstrb <= trans.m_wstrb[beat];
               m_vif.m_cb.wlast <= (beat == trans.m_len);
+              m_vif.m_cb.wuser <= trans.m_wuser[beat];
               m_vif.m_cb.wvalid <= 1'b1;
 
               @(m_vif.m_cb);
@@ -368,6 +371,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
             end
             m_vif.m_cb.wvalid <= 1'b0;
             m_vif.m_cb.wlast <= 1'b0;
+            m_vif.m_cb.wuser <= '0;
           end
         end
       end

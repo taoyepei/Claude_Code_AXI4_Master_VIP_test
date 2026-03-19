@@ -73,6 +73,46 @@ class axi4_transaction extends uvm_sequence_item;
     m_ruser.size() == (m_trans_type == READ) ? (m_len + 1) : 0;
   }
 
+  // Initialize WSTRB and data after randomization
+  function void post_randomize();
+    int bytes_per_beat;
+    bytes_per_beat = 1 << m_size;
+
+    // Initialize data array if empty
+    if (m_data.size() == 0) begin
+      for (int i = 0; i <= m_len; i++) begin
+        m_data.push_back({$random, $random, $random, $random});
+      end
+    end
+
+    // Initialize WSTRB for write transactions
+    if (m_trans_type == WRITE && m_wstrb.size() > 0) begin
+      for (int beat = 0; beat <= m_len; beat++) begin
+        // Calculate strobe based on size and alignment for first beat
+        if (beat == 0) begin
+          int lower_byte = m_addr % bytes_per_beat;
+          m_wstrb[beat] = ((1 << bytes_per_beat) - 1) << lower_byte;
+        end else begin
+          m_wstrb[beat] = (1 << bytes_per_beat) - 1;
+        end
+      end
+    end
+
+    // Initialize WUSER for write transactions
+    if (m_trans_type == WRITE && m_wuser.size() > 0) begin
+      for (int i = 0; i <= m_len; i++) begin
+        m_wuser[i] = '0;
+      end
+    end
+
+    // Initialize RUSER for read transactions
+    if (m_trans_type == READ && m_ruser.size() > 0) begin
+      for (int i = 0; i <= m_len; i++) begin
+        m_ruser[i] = '0;
+      end
+    end
+  endfunction
+
   function new(string name = "axi4_transaction");
     super.new(name);
     m_id = 0;
