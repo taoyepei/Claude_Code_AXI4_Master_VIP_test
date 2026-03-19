@@ -66,7 +66,7 @@ class axi4_monitor extends uvm_monitor;
     super.build_phase(phase);
     `uvm_info(get_type_name(), $sformatf("Building monitor: %s", get_name()), UVM_HIGH)
 
-    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "vif", m_vif)) begin
+    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "m_vif", m_vif)) begin
       `uvm_fatal(get_type_name(), "Virtual interface not found in config_db. Ensure uvm_config_db#(virtual axi4_if)::set() is called in agent/env/test.")
     end
 

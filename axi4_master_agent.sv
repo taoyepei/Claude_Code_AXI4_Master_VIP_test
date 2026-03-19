@@ -36,13 +36,13 @@ class axi4_master_agent extends uvm_agent;
     end
 
     // Get virtual interface from parent (env)
-    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "vif", m_vif)) begin
+    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "m_vif", m_vif)) begin
       `uvm_fatal(get_type_name(), "Virtual interface not found in config_db. Ensure uvm_config_db#(virtual axi4_if)::set() is called in test/env.")
     end
 
     // Pass configuration and interface to monitor
     uvm_config_db#(axi4_cfg)::set(this, "m_monitor", "cfg", m_cfg);
-    uvm_config_db#(virtual axi4_if)::set(this, "m_monitor", "vif", m_vif);
+    uvm_config_db#(virtual axi4_if)::set(this, "m_monitor", "m_vif", m_vif);
 
     // Create monitor
     m_monitor = axi4_monitor::type_id::create("m_monitor", this);
@@ -50,7 +50,7 @@ class axi4_master_agent extends uvm_agent;
     if (m_is_active) begin
       // Pass configuration and interface to driver
       uvm_config_db#(axi4_cfg)::set(this, "m_driver", "cfg", m_cfg);
-      uvm_config_db#(virtual axi4_if)::set(this, "m_driver", "vif", m_vif);
+      uvm_config_db#(virtual axi4_if)::set(this, "m_driver", "m_vif", m_vif);
 
       // Create driver and sequencer
       m_sequencer = axi4_sequencer::type_id::create("m_sequencer", this);

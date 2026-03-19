@@ -31,13 +31,13 @@ class axi4_env extends uvm_env;
     end
 
     // Get virtual interface from test
-    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "vif", m_vif)) begin
+    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "m_vif", m_vif)) begin
       `uvm_fatal(get_type_name(), "Virtual interface not found in config_db. Ensure uvm_config_db#(virtual axi4_if)::set() is called in test.")
     end
 
     // Pass configuration and interface to agent
     uvm_config_db#(axi4_cfg)::set(this, "m_master_agent", "cfg", m_cfg);
-    uvm_config_db#(virtual axi4_if)::set(this, "m_master_agent", "vif", m_vif);
+    uvm_config_db#(virtual axi4_if)::set(this, "m_master_agent", "m_vif", m_vif);
 
     // Create agent
     m_master_agent = axi4_master_agent::type_id::create("m_master_agent", this);

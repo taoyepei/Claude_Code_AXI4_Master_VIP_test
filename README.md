@@ -90,7 +90,7 @@ module tb_top;
 
   // UVM start
   initial begin
-    uvm_config_db#(virtual axi4_if)::set(null, "*", "vif", axi_if);
+    uvm_config_db#(virtual axi4_if)::set(null, "*", "m_vif", axi_if);
     run_test("your_test");
   end
 endmodule
@@ -114,8 +114,8 @@ class my_test extends uvm_test;
     super.build_phase(phase);
 
     // Get interface from testbench
-    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "vif", m_vif))
-      `uvm_fatal(get_type_name(), "No vif")
+    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "m_vif", m_vif))
+      `uvm_fatal(get_type_name(), "No m_vif")
 
     // Configure VIP
     m_cfg = axi4_cfg::type_id::create("m_cfg");
@@ -123,7 +123,7 @@ class my_test extends uvm_test;
 
     // Set configuration and interface for env
     uvm_config_db#(axi4_cfg)::set(this, "m_env", "cfg", m_cfg);
-    uvm_config_db#(virtual axi4_if)::set(this, "m_env", "vif", m_vif);
+    uvm_config_db#(virtual axi4_if)::set(this, "m_env", "m_vif", m_vif);
 
     // Create environment
     m_env = axi4_env::type_id::create("m_env", this);
@@ -169,11 +169,11 @@ vlog -sv -f files.f your_tb.sv +incdir+.
 ### 4. Config Database Hierarchy
 
 ```
-test (uvm_config_db::set cfg, vif)
-  └── env (gets cfg, vif from test)
-      └── agent (gets cfg, vif from env)
-          ├── monitor (gets cfg, vif from agent)
-          └── driver (gets cfg, vif from agent)
+test    set(null, "*",          "m_vif", vif)  set(this, "m_env",      "cfg", cfg)
+  └── env    get(this, "", "m_vif", m_vif)      set(this, "m_master_agent", "m_vif", m_vif)
+      └── agent  get(this, "", "m_vif", m_vif)  set(this, "m_monitor"/"m_driver", "m_vif", m_vif)
+          ├── monitor  get(this, "", "m_vif", m_vif)
+          └── driver   get(this, "", "m_vif", m_vif)
 ```
 
 ## Key Features

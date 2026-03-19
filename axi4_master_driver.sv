@@ -41,7 +41,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     super.build_phase(phase);
     `uvm_info(get_type_name(), $sformatf("Building driver: %s", get_name()), UVM_HIGH)
 
-    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "vif", m_vif)) begin
+    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "m_vif", m_vif)) begin
       `uvm_fatal(get_type_name(), "Virtual interface not found in config_db. Ensure uvm_config_db#(virtual axi4_if)::set() is called in agent/env/test.")
     end
 
@@ -53,6 +53,9 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   endfunction
 
   task run_phase(uvm_phase phase);
+    // Drive all signals to 0 immediately (before any clock edge) to avoid X state
+    drive_idle_values();
+
     // Wait for reset to be released first
     wait_for_reset();
 
@@ -65,6 +68,41 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       drive_r_channel();
       reset_monitor();
     join
+  endtask
+
+  // Drive all signals to 0 immediately using direct assignment (no clocking block needed)
+  task drive_idle_values();
+    m_vif.awid    = '0;
+    m_vif.awaddr  = '0;
+    m_vif.awlen   = '0;
+    m_vif.awsize  = '0;
+    m_vif.awburst = '0;
+    m_vif.awlock  = '0;
+    m_vif.awcache = '0;
+    m_vif.awprot  = '0;
+    m_vif.awqos   = '0;
+    m_vif.awregion = '0;
+    m_vif.awuser  = '0;
+    m_vif.awvalid = 1'b0;
+    m_vif.wdata   = '0;
+    m_vif.wstrb   = '0;
+    m_vif.wlast   = 1'b0;
+    m_vif.wuser   = '0;
+    m_vif.wvalid  = 1'b0;
+    m_vif.bready  = 1'b0;
+    m_vif.arid    = '0;
+    m_vif.araddr  = '0;
+    m_vif.arlen   = '0;
+    m_vif.arsize  = '0;
+    m_vif.arburst = '0;
+    m_vif.arlock  = '0;
+    m_vif.arcache = '0;
+    m_vif.arprot  = '0;
+    m_vif.arqos   = '0;
+    m_vif.arregion = '0;
+    m_vif.aruser  = '0;
+    m_vif.arvalid = 1'b0;
+    m_vif.rready  = 1'b0;
   endtask
 
   // Wait for reset to be released before driving signals
@@ -94,49 +132,41 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     end
   endtask
 
-  // Drive all signals to reset values
-  function void drive_reset_values();
-    // Write address channel
-    m_vif.m_cb.awid   <= '0;
-    m_vif.m_cb.awaddr <= '0;
-    m_vif.m_cb.awlen  <= '0;
-    m_vif.m_cb.awsize <= '0;
+  // Drive all signals to reset values via clocking block
+  task drive_reset_values();
+    @(m_vif.m_cb);
+    m_vif.m_cb.awid    <= '0;
+    m_vif.m_cb.awaddr  <= '0;
+    m_vif.m_cb.awlen   <= '0;
+    m_vif.m_cb.awsize  <= '0;
     m_vif.m_cb.awburst <= '0;
-    m_vif.m_cb.awlock <= '0;
+    m_vif.m_cb.awlock  <= '0;
     m_vif.m_cb.awcache <= '0;
-    m_vif.m_cb.awprot <= '0;
-    m_vif.m_cb.awqos <= '0;
+    m_vif.m_cb.awprot  <= '0;
+    m_vif.m_cb.awqos   <= '0;
     m_vif.m_cb.awregion <= '0;
-    m_vif.m_cb.awuser <= '0;
+    m_vif.m_cb.awuser  <= '0;
     m_vif.m_cb.awvalid <= 1'b0;
-
-    // Write data channel
-    m_vif.m_cb.wdata <= '0;
-    m_vif.m_cb.wstrb <= '0;
-    m_vif.m_cb.wlast <= 1'b0;
-    m_vif.m_cb.wuser <= '0;
-    m_vif.m_cb.wvalid <= 1'b0;
-
-    // Write response channel
-    m_vif.m_cb.bready <= 1'b0;
-
-    // Read address channel
-    m_vif.m_cb.arid   <= '0;
-    m_vif.m_cb.araddr <= '0;
-    m_vif.m_cb.arlen  <= '0;
-    m_vif.m_cb.arsize <= '0;
+    m_vif.m_cb.wdata   <= '0;
+    m_vif.m_cb.wstrb   <= '0;
+    m_vif.m_cb.wlast   <= 1'b0;
+    m_vif.m_cb.wuser   <= '0;
+    m_vif.m_cb.wvalid  <= 1'b0;
+    m_vif.m_cb.bready  <= 1'b0;
+    m_vif.m_cb.arid    <= '0;
+    m_vif.m_cb.araddr  <= '0;
+    m_vif.m_cb.arlen   <= '0;
+    m_vif.m_cb.arsize  <= '0;
     m_vif.m_cb.arburst <= '0;
-    m_vif.m_cb.arlock <= '0;
+    m_vif.m_cb.arlock  <= '0;
     m_vif.m_cb.arcache <= '0;
-    m_vif.m_cb.arprot <= '0;
-    m_vif.m_cb.arqos <= '0;
+    m_vif.m_cb.arprot  <= '0;
+    m_vif.m_cb.arqos   <= '0;
     m_vif.m_cb.arregion <= '0;
-    m_vif.m_cb.aruser <= '0;
+    m_vif.m_cb.aruser  <= '0;
     m_vif.m_cb.arvalid <= 1'b0;
-
-    // Read data channel
-    m_vif.m_cb.rready <= 1'b0;
-  endfunction
+    m_vif.m_cb.rready  <= 1'b0;
+  endtask
 
   // Get transactions from sequencer and split if needed
   task get_and_drive();
