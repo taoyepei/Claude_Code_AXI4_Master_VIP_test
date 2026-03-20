@@ -46,8 +46,10 @@ class axi4_transaction extends uvm_sequence_item;
     m_len <= 255;
   }
 
+  // ARSIZE must not exceed data bus width
+  // For 64-bit data bus (8 bytes), max arsize is 3 (2^3 = 8 bytes)
   constraint c_size_range {
-    m_size <= 7;
+    (1 << m_size) <= (`AXI4_DATA_WIDTH / 8);
   }
 
   constraint c_burst_type {
