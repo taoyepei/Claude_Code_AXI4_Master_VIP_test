@@ -291,11 +291,13 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     axi4_transaction trans;
 
     forever begin
-      // Wait for transaction and clock edge
-      wait(m_aw_pending.size() > 0 && m_reset_done);
+      // Wait for clock edge first, then check for transaction
       @(m_vif.m_cb);
 
       if (!m_reset_done) continue;
+
+      // Skip if no pending transaction
+      if (m_aw_pending.size() == 0) continue;
 
       trans = m_aw_pending.pop_front();
 
@@ -313,13 +315,15 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       m_vif.m_cb.awuser  <= trans.m_user;
       m_vif.m_cb.awvalid <= 1'b1;
 
-      `uvm_info(get_type_name(), $sformatf("AW channel: Driving awaddr=0x%0h, awid=0x%0h, awvalid=1", trans.m_addr, trans.m_id), UVM_LOW)
+      `uvm_info(get_type_name(), $sformatf("AW channel: Driving awaddr=0x%0h, awid=0x%0h, awvalid=1 at time %0t", trans.m_addr, trans.m_id, $time), UVM_LOW)
 
-      // Wait for address to be accepted
-      do begin
+      // Wait for address to be accepted (awready asserted)
+      // Keep awvalid high until awready is seen
+      while (1) begin
         @(m_vif.m_cb);
         if (!m_reset_done) break;
-      end while (!m_vif.m_cb.awready);
+        if (m_vif.m_cb.awready) break;
+      end
 
       if (!m_reset_done) begin
         m_vif.m_cb.awvalid <= 1'b0;
@@ -337,9 +341,10 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       // Queue for W channel
       m_w_queue.push_back(trans);
 
-      // Transaction interval
-      for (int j = 0; j < m_trans_interval && m_reset_done; j++) begin
+      // Transaction interval - wait specified cycles before next transaction
+      repeat (m_trans_interval) begin
         @(m_vif.m_cb);
+        if (!m_reset_done) break;
       end
     end
   endtask
@@ -442,15 +447,18 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     axi4_transaction trans;
 
     forever begin
-      // Wait for transaction and clock edge
-      wait(m_ar_pending.size() > 0 && m_reset_done);
+      // Wait for clock edge first, then check for transaction
       @(m_vif.m_cb);
 
       if (!m_reset_done) continue;
 
+      // Skip if no pending transaction
+      if (m_ar_pending.size() == 0) continue;
+
       trans = m_ar_pending.pop_front();
 
       // Drive all AR signals together using non-blocking assignment
+      // All assignments happen in the same delta cycle due to NBA
       m_vif.m_cb.arid    <= trans.m_id;
       m_vif.m_cb.araddr  <= trans.m_addr;
       m_vif.m_cb.arlen   <= trans.m_len;
@@ -464,13 +472,15 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       m_vif.m_cb.aruser  <= trans.m_user;
       m_vif.m_cb.arvalid <= 1'b1;
 
-      `uvm_info(get_type_name(), $sformatf("AR channel: Driving araddr=0x%0h, arid=0x%0h, arvalid=1", trans.m_addr, trans.m_id), UVM_LOW)
+      `uvm_info(get_type_name(), $sformatf("AR channel: Driving araddr=0x%0h, arid=0x%0h, arvalid=1 at time %0t", trans.m_addr, trans.m_id, $time), UVM_LOW)
 
-      // Wait for address to be accepted
-      do begin
+      // Wait for address to be accepted (arready asserted)
+      // Keep arvalid high until arready is seen
+      while (1) begin
         @(m_vif.m_cb);
         if (!m_reset_done) break;
-      end while (!m_vif.m_cb.arready);
+        if (m_vif.m_cb.arready) break;
+      end
 
       if (!m_reset_done) begin
         m_vif.m_cb.arvalid <= 1'b0;
@@ -482,9 +492,10 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       `uvm_info(get_type_name(), $sformatf("AR channel: Address 0x%0h accepted at time %0t", trans.m_addr, $time), UVM_LOW)
 
-      // Transaction interval
-      for (int j = 0; j < m_trans_interval && m_reset_done; j++) begin
+      // Transaction interval - wait specified cycles before next transaction
+      repeat (m_trans_interval) begin
         @(m_vif.m_cb);
+        if (!m_reset_done) break;
       end
     end
   endtask
