@@ -17,7 +17,7 @@ class axi4_sequence extends uvm_sequence #(axi4_transaction);
   rand int               m_min_len;
   rand int               m_max_len;
   rand bit [63:0]        m_start_addr;        // Starting address for first transaction
-  rand bit               m_use_start_addr;    // Enable address increment mode
+  bit                    m_use_start_addr;    // Enable address increment mode (NOT rand)
   rand bit [63:0]        m_addr_increment;    // Address increment between transactions
 
   constraint c_num_trans {
