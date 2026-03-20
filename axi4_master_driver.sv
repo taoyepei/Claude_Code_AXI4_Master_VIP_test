@@ -70,40 +70,40 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     join
   endtask
 
-  // Drive all signals to 0 immediately using blocking assignment
+  // Drive all signals to 0 immediately using non-blocking assignment
   task drive_idle_values();
     @(posedge m_vif.aclk);
-    m_vif.awid    = '0;
-    m_vif.awaddr  = '0;
-    m_vif.awlen   = '0;
-    m_vif.awsize  = '0;
-    m_vif.awburst = '0;
-    m_vif.awlock  = '0;
-    m_vif.awcache = '0;
-    m_vif.awprot  = '0;
-    m_vif.awqos   = '0;
-    m_vif.awregion = '0;
-    m_vif.awuser  = '0;
-    m_vif.awvalid = 1'b0;
-    m_vif.wdata   = '0;
-    m_vif.wstrb   = '0;
-    m_vif.wlast   = 1'b0;
-    m_vif.wuser   = '0;
-    m_vif.wvalid  = 1'b0;
-    m_vif.bready  = 1'b0;
-    m_vif.arid    = '0;
-    m_vif.araddr  = '0;
-    m_vif.arlen   = '0;
-    m_vif.arsize  = '0;
-    m_vif.arburst = '0;
-    m_vif.arlock  = '0;
-    m_vif.arcache = '0;
-    m_vif.arprot  = '0;
-    m_vif.arqos   = '0;
-    m_vif.arregion = '0;
-    m_vif.aruser  = '0;
-    m_vif.arvalid = 1'b0;
-    m_vif.rready  = 1'b0;
+    m_vif.awid    <= '0;
+    m_vif.awaddr  <= '0;
+    m_vif.awlen   <= '0;
+    m_vif.awsize  <= '0;
+    m_vif.awburst <= '0;
+    m_vif.awlock  <= '0;
+    m_vif.awcache <= '0;
+    m_vif.awprot  <= '0;
+    m_vif.awqos   <= '0;
+    m_vif.awregion <= '0;
+    m_vif.awuser  <= '0;
+    m_vif.awvalid <= 1'b0;
+    m_vif.wdata   <= '0;
+    m_vif.wstrb   <= '0;
+    m_vif.wlast   <= 1'b0;
+    m_vif.wuser   <= '0;
+    m_vif.wvalid  <= 1'b0;
+    m_vif.bready  <= 1'b0;
+    m_vif.arid    <= '0;
+    m_vif.araddr  <= '0;
+    m_vif.arlen   <= '0;
+    m_vif.arsize  <= '0;
+    m_vif.arburst <= '0;
+    m_vif.arlock  <= '0;
+    m_vif.arcache <= '0;
+    m_vif.arprot  <= '0;
+    m_vif.arqos   <= '0;
+    m_vif.arregion <= '0;
+    m_vif.aruser  <= '0;
+    m_vif.arvalid <= 1'b0;
+    m_vif.rready  <= 1'b0;
     `uvm_info(get_type_name(), "Drive idle values completed", UVM_LOW)
   endtask
 
@@ -137,37 +137,37 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   // Drive all signals to reset values
   task drive_reset_values();
     @(posedge m_vif.aclk);
-    m_vif.awid    = '0;
-    m_vif.awaddr  = '0;
-    m_vif.awlen   = '0;
-    m_vif.awsize  = '0;
-    m_vif.awburst = '0;
-    m_vif.awlock  = '0;
-    m_vif.awcache = '0;
-    m_vif.awprot  = '0;
-    m_vif.awqos   = '0;
-    m_vif.awregion = '0;
-    m_vif.awuser  = '0;
-    m_vif.awvalid = 1'b0;
-    m_vif.wdata   = '0;
-    m_vif.wstrb   = '0;
-    m_vif.wlast   = 1'b0;
-    m_vif.wuser   = '0;
-    m_vif.wvalid  = 1'b0;
-    m_vif.bready  = 1'b0;
-    m_vif.arid    = '0;
-    m_vif.araddr  = '0;
-    m_vif.arlen   = '0;
-    m_vif.arsize  = '0;
-    m_vif.arburst = '0;
-    m_vif.arlock  = '0;
-    m_vif.arcache = '0;
-    m_vif.arprot  = '0;
-    m_vif.arqos   = '0;
-    m_vif.arregion = '0;
-    m_vif.aruser  = '0;
-    m_vif.arvalid = 1'b0;
-    m_vif.rready  = 1'b0;
+    m_vif.awid    <= '0;
+    m_vif.awaddr  <= '0;
+    m_vif.awlen   <= '0;
+    m_vif.awsize  <= '0;
+    m_vif.awburst <= '0;
+    m_vif.awlock  <= '0;
+    m_vif.awcache <= '0;
+    m_vif.awprot  <= '0;
+    m_vif.awqos   <= '0;
+    m_vif.awregion <= '0;
+    m_vif.awuser  <= '0;
+    m_vif.awvalid <= 1'b0;
+    m_vif.wdata   <= '0;
+    m_vif.wstrb   <= '0;
+    m_vif.wlast   <= 1'b0;
+    m_vif.wuser   <= '0;
+    m_vif.wvalid  <= 1'b0;
+    m_vif.bready  <= 1'b0;
+    m_vif.arid    <= '0;
+    m_vif.araddr  <= '0;
+    m_vif.arlen   <= '0;
+    m_vif.arsize  <= '0;
+    m_vif.arburst <= '0;
+    m_vif.arlock  <= '0;
+    m_vif.arcache <= '0;
+    m_vif.arprot  <= '0;
+    m_vif.arqos   <= '0;
+    m_vif.arregion <= '0;
+    m_vif.aruser  <= '0;
+    m_vif.arvalid <= 1'b0;
+    m_vif.rready  <= 1'b0;
     `uvm_info(get_type_name(), "Drive reset values completed", UVM_LOW)
   endtask
 
@@ -210,46 +210,86 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   endtask
 
   // Split transaction if needed
+  // Handles: 2KB boundary, 4KB boundary, and max burst length (32 beats)
   function void split_transaction(axi4_transaction trans, ref axi4_transaction split_trans[$]);
     int remaining_len;
     int current_addr;
     int bytes_per_beat;
     int boundary_2kb;
+    int boundary_4kb;
+    int end_addr;
     axi4_transaction new_trans;
     logic [31:0] base_id;
 
     split_trans.delete();
     base_id = trans.m_id;
 
-    // Check if split needed
-    if (trans.m_burst != INCR || trans.m_len <= 16) begin
+    bytes_per_beat = 1 << trans.m_size;
+    remaining_len = trans.m_len;
+    current_addr = trans.m_addr;
+
+    // Check if split needed for INCR bursts
+    // Split if: len > 16, OR crosses 2KB boundary, OR crosses 4KB boundary
+    if (trans.m_burst != INCR) begin
+      // FIXED and WRAP bursts are not split
       trans.m_split_id = 0;
       split_trans.push_back(trans);
       return;
     end
 
-    bytes_per_beat = 1 << trans.m_size;
-    remaining_len = trans.m_len;
-    current_addr = trans.m_addr;
+    // Calculate end address to check 4KB boundary crossing
+    end_addr = current_addr + (trans.m_len + 1) * bytes_per_beat;
+
+    // Check if split is needed:
+    // 1. Burst length > 16 (existing requirement)
+    // 2. Crosses 2KB boundary (existing requirement)
+    // 3. Crosses 4KB boundary (new requirement per VIP spec)
+    if (trans.m_len <= 16 &&
+        (current_addr / 2048) == (end_addr - 1) / 2048 &&
+        (current_addr / 4096) == (end_addr - 1) / 4096) begin
+      // No split needed
+      trans.m_split_id = 0;
+      split_trans.push_back(trans);
+      return;
+    end
+
     boundary_2kb = ((current_addr / 2048) + 1) * 2048;
+    boundary_4kb = ((current_addr / 4096) + 1) * 4096;
 
     while (remaining_len > 0) begin
       int max_len_this_burst;
       int len_this_burst;
-      int bytes_to_boundary;
-      int max_beats_to_boundary;
+      int bytes_to_2kb;
+      int bytes_to_4kb;
+      int max_beats_to_2kb;
+      int max_beats_to_4kb;
+      int max_beats_allowed;
+
+      bytes_per_beat = 1 << trans.m_size;
 
       // Calculate max length before hitting 2KB boundary
-      bytes_to_boundary = boundary_2kb - current_addr;
-      max_beats_to_boundary = (bytes_to_boundary + bytes_per_beat - 1) / bytes_per_beat;
+      bytes_to_2kb = boundary_2kb - current_addr;
+      max_beats_to_2kb = (bytes_to_2kb + bytes_per_beat - 1) / bytes_per_beat;
 
+      // Calculate max length before hitting 4KB boundary
+      bytes_to_4kb = boundary_4kb - current_addr;
+      max_beats_to_4kb = (bytes_to_4kb + bytes_per_beat - 1) / bytes_per_beat;
+
+      // Max burst length is 32 beats (per spec and VIP requirement)
       max_len_this_burst = (remaining_len < 32) ? remaining_len : 32;
 
-      if (max_beats_to_boundary < max_len_this_burst && max_beats_to_boundary > 0) begin
-        len_this_burst = max_beats_to_boundary - 1;
-      end else begin
-        len_this_burst = max_len_this_burst - 1;
+      // Find the limiting factor (2KB boundary, 4KB boundary, or max length)
+      max_beats_allowed = max_len_this_burst;
+
+      if (max_beats_to_2kb > 0 && max_beats_to_2kb < max_beats_allowed) begin
+        max_beats_allowed = max_beats_to_2kb;
       end
+
+      if (max_beats_to_4kb > 0 && max_beats_to_4kb < max_beats_allowed) begin
+        max_beats_allowed = max_beats_to_4kb;
+      end
+
+      len_this_burst = max_beats_allowed - 1;
 
       if (len_this_burst < 0) begin
         len_this_burst = 0;
@@ -282,6 +322,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       if (remaining_len > 0) begin
         boundary_2kb = ((current_addr / 2048) + 1) * 2048;
+        boundary_4kb = ((current_addr / 4096) + 1) * 4096;
       end
     end
   endfunction
@@ -301,20 +342,19 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       trans = m_aw_pending.pop_front();
 
-      // Drive all AW signals together using blocking assignment
-      // This ensures all signals change at the same simulation time
-      m_vif.awid    = trans.m_id;
-      m_vif.awaddr  = trans.m_addr;
-      m_vif.awlen   = trans.m_len;
-      m_vif.awsize  = trans.m_size;
-      m_vif.awburst = trans.m_burst;
-      m_vif.awlock  = trans.m_lock;
-      m_vif.awcache = trans.m_cache;
-      m_vif.awprot  = trans.m_prot;
-      m_vif.awqos   = trans.m_qos;
-      m_vif.awregion = trans.m_region;
-      m_vif.awuser  = trans.m_user;
-      m_vif.awvalid = 1'b1;
+      // Drive all AW signals together using non-blocking assignment
+      m_vif.awid    <= trans.m_id;
+      m_vif.awaddr  <= trans.m_addr;
+      m_vif.awlen   <= trans.m_len;
+      m_vif.awsize  <= trans.m_size;
+      m_vif.awburst <= trans.m_burst;
+      m_vif.awlock  <= trans.m_lock;
+      m_vif.awcache <= trans.m_cache;
+      m_vif.awprot  <= trans.m_prot;
+      m_vif.awqos   <= trans.m_qos;
+      m_vif.awregion <= trans.m_region;
+      m_vif.awuser  <= trans.m_user;
+      m_vif.awvalid <= 1'b1;
 
       `uvm_info(get_type_name(), $sformatf("AW channel: Driving awaddr=0x%0h, awid=0x%0h, awvalid=1 at time %0t", trans.m_addr, trans.m_id, $time), UVM_LOW)
 
@@ -327,12 +367,12 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       end
 
       if (!m_reset_done) begin
-        m_vif.awvalid = 1'b0;
+        m_vif.awvalid <= 1'b0;
         continue;
       end
 
       trans.m_addr_accept_time = $time;
-      m_vif.awvalid = 1'b0;
+      m_vif.awvalid <= 1'b0;
 
       `uvm_info(get_type_name(), $sformatf("AW channel: Address 0x%0h accepted at time %0t", trans.m_addr, $time), UVM_LOW)
 
@@ -371,11 +411,11 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
             trans = m_w_queue.pop_front();
 
             for (int beat = 0; beat <= trans.m_len && m_reset_done; beat++) begin
-              m_vif.wdata = trans.m_data[beat];
-              m_vif.wstrb = trans.m_wstrb[beat];
-              m_vif.wlast = (beat == trans.m_len);
-              m_vif.wuser = trans.m_wuser[beat];
-              m_vif.wvalid = 1'b1;
+              m_vif.wdata <= trans.m_data[beat];
+              m_vif.wstrb <= trans.m_wstrb[beat];
+              m_vif.wlast <= (beat == trans.m_len);
+              m_vif.wuser <= trans.m_wuser[beat];
+              m_vif.wvalid <= 1'b1;
 
               @(posedge m_vif.aclk);
               while (!m_vif.wready && m_reset_done) begin
@@ -387,9 +427,9 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
             if (m_reset_done) begin
               trans.m_data_complete_time = $time;
             end
-            m_vif.wvalid = 1'b0;
-            m_vif.wlast = 1'b0;
-            m_vif.wuser = '0;
+            m_vif.wvalid <= 1'b0;
+            m_vif.wlast <= 1'b0;
+            m_vif.wuser <= '0;
           end
         end else begin
           // Data before addr mode: check osd limit
@@ -397,11 +437,11 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
             trans = m_w_queue.pop_front();
 
             for (int beat = 0; beat <= trans.m_len && m_reset_done; beat++) begin
-              m_vif.wdata = trans.m_data[beat];
-              m_vif.wstrb = trans.m_wstrb[beat];
-              m_vif.wlast = (beat == trans.m_len);
-              m_vif.wuser = trans.m_wuser[beat];
-              m_vif.wvalid = 1'b1;
+              m_vif.wdata <= trans.m_data[beat];
+              m_vif.wstrb <= trans.m_wstrb[beat];
+              m_vif.wlast <= (beat == trans.m_len);
+              m_vif.wuser <= trans.m_wuser[beat];
+              m_vif.wvalid <= 1'b1;
 
               @(posedge m_vif.aclk);
               while (!m_vif.wready && m_reset_done) begin
@@ -413,9 +453,9 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
             if (m_reset_done) begin
               trans.m_data_complete_time = $time;
             end
-            m_vif.wvalid = 1'b0;
-            m_vif.wlast = 1'b0;
-            m_vif.wuser = '0;
+            m_vif.wvalid <= 1'b0;
+            m_vif.wlast <= 1'b0;
+            m_vif.wuser <= '0;
           end
         end
       end
@@ -429,11 +469,11 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       // Skip if reset not done
       if (!m_reset_done) begin
-        m_vif.bready = 1'b0;
+        m_vif.bready <= 1'b0;
         continue;
       end
 
-      m_vif.bready = 1'b1;
+      m_vif.bready <= 1'b1;
 
       if (m_vif.bvalid) begin
         if (m_b_pending.exists(m_vif.bid)) begin
@@ -458,20 +498,19 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       trans = m_ar_pending.pop_front();
 
-      // Drive all AR signals together using blocking assignment
-      // This ensures all signals change at the same simulation time
-      m_vif.arid    = trans.m_id;
-      m_vif.araddr  = trans.m_addr;
-      m_vif.arlen   = trans.m_len;
-      m_vif.arsize  = trans.m_size;
-      m_vif.arburst = trans.m_burst;
-      m_vif.arlock  = trans.m_lock;
-      m_vif.arcache = trans.m_cache;
-      m_vif.arprot  = trans.m_prot;
-      m_vif.arqos   = trans.m_qos;
-      m_vif.arregion = trans.m_region;
-      m_vif.aruser  = trans.m_user;
-      m_vif.arvalid = 1'b1;
+      // Drive all AR signals together using non-blocking assignment
+      m_vif.arid    <= trans.m_id;
+      m_vif.araddr  <= trans.m_addr;
+      m_vif.arlen   <= trans.m_len;
+      m_vif.arsize  <= trans.m_size;
+      m_vif.arburst <= trans.m_burst;
+      m_vif.arlock  <= trans.m_lock;
+      m_vif.arcache <= trans.m_cache;
+      m_vif.arprot  <= trans.m_prot;
+      m_vif.arqos   <= trans.m_qos;
+      m_vif.arregion <= trans.m_region;
+      m_vif.aruser  <= trans.m_user;
+      m_vif.arvalid <= 1'b1;
 
       `uvm_info(get_type_name(), $sformatf("AR channel: Driving araddr=0x%0h, arid=0x%0h, arvalid=1 at time %0t", trans.m_addr, trans.m_id, $time), UVM_LOW)
 
@@ -484,12 +523,12 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       end
 
       if (!m_reset_done) begin
-        m_vif.arvalid = 1'b0;
+        m_vif.arvalid <= 1'b0;
         continue;
       end
 
       trans.m_addr_accept_time = $time;
-      m_vif.arvalid = 1'b0;
+      m_vif.arvalid <= 1'b0;
 
       `uvm_info(get_type_name(), $sformatf("AR channel: Address 0x%0h accepted at time %0t", trans.m_addr, $time), UVM_LOW)
 
@@ -510,11 +549,11 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       // Skip if reset not done
       if (!m_reset_done) begin
-        m_vif.rready = 1'b0;
+        m_vif.rready <= 1'b0;
         continue;
       end
 
-      m_vif.rready = 1'b1;
+      m_vif.rready <= 1'b1;
 
       if (m_vif.rvalid && m_vif.rlast) begin
         // Read transaction completed
