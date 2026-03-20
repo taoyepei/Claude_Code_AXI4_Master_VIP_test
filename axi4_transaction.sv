@@ -54,6 +54,11 @@ class axi4_transaction extends uvm_sequence_item;
     m_burst inside {FIXED, INCR, WRAP};
   }
 
+  // Default: non-exclusive access (m_lock=0)
+  constraint c_lock_default {
+    m_lock == 0;
+  }
+
   constraint c_fixed_len {
     (m_burst == FIXED) -> (m_len <= 15);
   }
@@ -62,8 +67,19 @@ class axi4_transaction extends uvm_sequence_item;
     (m_burst == WRAP) -> (m_len inside {1, 3, 7, 15});
   }
 
+  // Address must be aligned to the transfer size for all burst types
   constraint c_addr_align {
-    (m_burst != WRAP) -> (m_addr % (1 << m_size) == 0);
+    (m_addr % (1 << m_size)) == 0;
+  }
+
+  // Exclusive access: burst length must be power of 2 (AXI4 spec requirement)
+  constraint c_exclusive_len {
+    (m_lock == 1) -> (m_len inside {0, 1, 3, 7, 15, 31, 63, 127, 255});
+  }
+
+  // Exclusive access: recommended to use INCR burst (not FIXED or WRAP)
+  constraint c_exclusive_burst {
+    (m_lock == 1) -> (m_burst == INCR);
   }
 
   constraint c_data_size {
