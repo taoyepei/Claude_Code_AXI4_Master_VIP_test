@@ -96,36 +96,34 @@ module tb_top;
 endmodule
 ```
 
-### 2. Custom Test
+### 2. Custom Test Examples
+
+#### 2.1 Read Transactions (默认)
 
 ```systemverilog
-class my_test extends uvm_test;
-  `uvm_component_utils(my_test)
+class my_read_test extends uvm_test;
+  `uvm_component_utils(my_read_test)
 
   axi4_env m_env;
   axi4_cfg m_cfg;
   virtual axi4_if m_vif;
 
-  function new(string name = "my_test", uvm_component parent);
+  function new(string name = "my_read_test", uvm_component parent);
     super.new(name, parent);
   endfunction
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
 
-    // Get interface from testbench
     if (!uvm_config_db#(virtual axi4_if)::get(this, "", "m_vif", m_vif))
       `uvm_fatal(get_type_name(), "No m_vif")
 
-    // Configure VIP
     m_cfg = axi4_cfg::type_id::create("m_cfg");
     m_cfg.m_max_outstanding = 16;
 
-    // Set configuration and interface for env
     uvm_config_db#(axi4_cfg)::set(this, "m_env", "cfg", m_cfg);
     uvm_config_db#(virtual axi4_if)::set(this, "m_env", "m_vif", m_vif);
 
-    // Create environment
     m_env = axi4_env::type_id::create("m_env", this);
   endfunction
 
@@ -134,7 +132,7 @@ class my_test extends uvm_test;
 
     phase.raise_objection(this);
 
-    // Configure sequence
+    // Configure for read transactions
     seq.randomize() with {
       m_num_transactions == 20;
       m_default_trans_type == READ;
@@ -142,7 +140,172 @@ class my_test extends uvm_test;
       m_max_len == 15;
     };
 
-    // Start sequence on agent's sequencer
+    seq.start(m_env.m_master_agent.m_sequencer);
+
+    phase.drop_objection(this);
+  endtask
+endclass
+```
+
+#### 2.2 Write Transactions
+
+```systemverilog
+class my_write_test extends uvm_test;
+  `uvm_component_utils(my_write_test)
+
+  axi4_env m_env;
+  axi4_cfg m_cfg;
+  virtual axi4_if m_vif;
+
+  function new(string name = "my_write_test", uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+
+    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "m_vif", m_vif))
+      `uvm_fatal(get_type_name(), "No m_vif")
+
+    m_cfg = axi4_cfg::type_id::create("m_cfg");
+    m_cfg.m_max_outstanding = 16;
+
+    uvm_config_db#(axi4_cfg)::set(this, "m_env", "cfg", m_cfg);
+    uvm_config_db#(virtual axi4_if)::set(this, "m_env", "m_vif", m_vif);
+
+    m_env = axi4_env::type_id::create("m_env", this);
+  endfunction
+
+  task run_phase(uvm_phase phase);
+    axi4_sequence seq = axi4_sequence::type_id::create("seq");
+
+    phase.raise_objection(this);
+
+    // Configure for write transactions
+    seq.randomize() with {
+      m_num_transactions == 20;
+      m_default_trans_type == WRITE;  // Changed to WRITE
+      m_min_len == 0;
+      m_max_len == 15;
+    };
+
+    seq.start(m_env.m_master_agent.m_sequencer);
+
+    phase.drop_objection(this);
+  endtask
+endclass
+```
+
+#### 2.3 Mixed Read/Write Transactions
+
+```systemverilog
+class my_mixed_test extends uvm_test;
+  `uvm_component_utils(my_mixed_test)
+
+  axi4_env m_env;
+  axi4_cfg m_cfg;
+  virtual axi4_if m_vif;
+
+  function new(string name = "my_mixed_test", uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+
+    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "m_vif", m_vif))
+      `uvm_fatal(get_type_name(), "No m_vif")
+
+    m_cfg = axi4_cfg::type_id::create("m_cfg");
+    m_cfg.m_max_outstanding = 16;
+
+    uvm_config_db#(axi4_cfg)::set(this, "m_env", "cfg", m_cfg);
+    uvm_config_db#(virtual axi4_if)::set(this, "m_env", "m_vif", m_vif);
+
+    m_env = axi4_env::type_id::create("m_env", this);
+  endfunction
+
+  task run_phase(uvm_phase phase);
+    // Create separate sequences for read and write
+    axi4_sequence read_seq = axi4_sequence::type_id::create("read_seq");
+    axi4_sequence write_seq = axi4_sequence::type_id::create("write_seq");
+
+    phase.raise_objection(this);
+
+    // Fork to run read and write concurrently
+    fork
+      // Write sequence
+      begin
+        write_seq.randomize() with {
+          m_num_transactions == 10;
+          m_default_trans_type == WRITE;
+          m_min_len == 0;
+          m_max_len == 15;
+        };
+        write_seq.start(m_env.m_master_agent.m_sequencer);
+      end
+
+      // Read sequence
+      begin
+        read_seq.randomize() with {
+          m_num_transactions == 10;
+          m_default_trans_type == READ;
+          m_min_len == 0;
+          m_max_len == 15;
+        };
+        read_seq.start(m_env.m_master_agent.m_sequencer);
+      end
+    join
+
+    phase.drop_objection(this);
+  endtask
+endclass
+```
+
+#### 2.4 Custom Transaction Control
+
+```systemverilog
+class my_custom_test extends uvm_test;
+  `uvm_component_utils(my_custom_test)
+
+  axi4_env m_env;
+  axi4_cfg m_cfg;
+  virtual axi4_if m_vif;
+
+  function new(string name = "my_custom_test", uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+
+    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "m_vif", m_vif))
+      `uvm_fatal(get_type_name(), "No m_vif")
+
+    m_cfg = axi4_cfg::type_id::create("m_cfg");
+    m_cfg.m_max_outstanding = 8;
+    m_cfg.m_trans_interval = 2;  // 2 cycles between transactions
+
+    uvm_config_db#(axi4_cfg)::set(this, "m_env", "cfg", m_cfg);
+    uvm_config_db#(virtual axi4_if)::set(this, "m_env", "m_vif", m_vif);
+
+    m_env = axi4_env::type_id::create("m_env", this);
+  endfunction
+
+  task run_phase(uvm_phase phase);
+    axi4_sequence seq = axi4_sequence::type_id::create("seq");
+
+    phase.raise_objection(this);
+
+    // Test with specific burst type and longer bursts
+    seq.randomize() with {
+      m_num_transactions == 5;
+      m_default_trans_type == WRITE;
+      m_default_burst == INCR;  // FIXED, INCR, or WRAP
+      m_min_len == 16;
+      m_max_len == 31;
+    };
+
     seq.start(m_env.m_master_agent.m_sequencer);
 
     phase.drop_objection(this);
