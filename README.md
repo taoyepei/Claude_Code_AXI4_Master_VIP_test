@@ -313,6 +313,78 @@ class my_custom_test extends uvm_test;
 endclass
 ```
 
+#### 2.5 Address Control for Boundary Testing
+
+Use `m_use_start_addr=1` to enable address control mode. This is useful for testing 2KB/4KB boundary splitting:
+
+```systemverilog
+class my_boundary_test extends uvm_test;
+  `uvm_component_utils(my_boundary_test)
+
+  axi4_env m_env;
+  axi4_cfg m_cfg;
+  virtual axi4_if m_vif;
+
+  function new(string name = "my_boundary_test", uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+
+    if (!uvm_config_db#(virtual axi4_if)::get(this, "", "m_vif", m_vif))
+      `uvm_fatal(get_type_name(), "No m_vif")
+
+    m_cfg = axi4_cfg::type_id::create("m_cfg");
+    m_cfg.m_max_outstanding = 16;
+
+    uvm_config_db#(axi4_cfg)::set(this, "m_env", "cfg", m_cfg);
+    uvm_config_db#(virtual axi4_if)::set(this, "m_env", "m_vif", m_vif);
+
+    m_env = axi4_env::type_id::create("m_env", this);
+  endfunction
+
+  task run_phase(uvm_phase phase);
+    axi4_sequence seq = axi4_sequence::type_id::create("seq");
+
+    phase.raise_objection(this);
+
+    // Test 2KB boundary crossing - set start address near 2KB boundary
+    seq.randomize() with {
+      m_num_transactions == 10;
+      m_default_trans_type == WRITE;
+      m_default_burst == INCR;
+      m_min_len == 10;
+      m_max_len == 20;
+      // Enable address control mode
+      m_use_start_addr == 1;
+      // Start at 0x100 bytes before 2KB boundary
+      m_start_addr == 64'h1000 - 64'h100;  // 0xF00
+      // Each next transaction starts 2KB after previous
+      m_addr_increment == 64'h800;  // 2KB
+    };
+
+    seq.start(m_env.m_master_agent.m_sequencer);
+
+    phase.drop_objection(this);
+  endtask
+endclass
+```
+
+**Address Control Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `m_use_start_addr` | bit | Set to 1 to enable address control mode |
+| `m_start_addr` | bit[63:0] | Starting address for first transaction |
+| `m_addr_increment` | bit[63:0] | Address increment between transactions |
+
+**Note:** When `m_use_start_addr=1`, the sequence will:
+- Set first transaction address to `m_start_addr`
+- Each subsequent transaction address = previous + `m_addr_increment`
+- `AxSIZE` and `AxLEN` are still randomized within constraints (not calculated from increment)
+- VIP driver automatically splits bursts that cross 2KB or 4KB boundaries
+
 ### 3. Compilation
 
 ```bash
