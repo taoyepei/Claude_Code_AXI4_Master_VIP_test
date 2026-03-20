@@ -4,8 +4,8 @@
 // AXI4 Data Width Parameters
 `define AXI4_DATA_WIDTH      64
 `define AXI4_ADDR_WIDTH      32
-`define AXI4_ID_WIDTH        4
-`define AXI4_USER_WIDTH      1
+`define AXI4_ID_WIDTH        8
+`define AXI4_USER_WIDTH      8
 
 // Derived parameters
 `define AXI4_STRB_WIDTH      (`AXI4_DATA_WIDTH / 8)
