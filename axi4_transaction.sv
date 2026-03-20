@@ -91,7 +91,9 @@ class axi4_transaction extends uvm_sequence_item;
   // Valid modifiable values: 4'b0110, 4'b0111, 4'b1110, 4'b1111
   constraint c_cache_valid {
     // If non-modifiable (AxCACHE[3]=0 && AxCACHE[2]=0), then AxCACHE[1]=0
-    ((m_cache[3] == 0 && m_cache[2] == 0) -> (m_cache[1] == 0));
+    if (m_cache[3] == 0 && m_cache[2] == 0) {
+      m_cache[1] == 0;
+    }
   }
 
   constraint c_data_size {
