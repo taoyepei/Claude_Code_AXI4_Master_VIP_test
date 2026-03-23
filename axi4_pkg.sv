@@ -140,15 +140,15 @@ package axi4_pkg;
   typedef class axi4_master_agent;
   typedef class axi4_env;
 
-endpackage : axi4_pkg
+  // Include VIP component files inside the package
+  `include "axi4_transaction.sv"
+  `include "axi4_sequence.sv"
+  `include "axi4_sequencer.sv"
+  `include "axi4_master_driver.sv"
+  `include "axi4_monitor.sv"
+  `include "axi4_master_agent.sv"
+  `include "axi4_env.sv"
 
-// Include VIP component files (must be outside package declaration)
-`include "axi4_transaction.sv"
-`include "axi4_sequence.sv"
-`include "axi4_sequencer.sv"
-`include "axi4_master_driver.sv"
-`include "axi4_monitor.sv"
-`include "axi4_master_agent.sv"
-`include "axi4_env.sv"
+endpackage : axi4_pkg
 
 `endif // AXI4_PKG_SV
