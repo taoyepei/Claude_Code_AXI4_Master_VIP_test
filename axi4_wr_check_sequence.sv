@@ -145,6 +145,9 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
     int iter, w_idx;
     bit [63:0] current_addr;
     int bytes_per_beat;
+    // Variables for beat processing (moved to task level for SV compliance)
+    int beat;
+    bit [63:0] beat_addr;
 
     bytes_per_beat = 1 << m_transfer_size;
 
@@ -196,7 +199,6 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
 
         // Calculate and store addresses for each beat
         for (int beat = 0; beat <= trans.m_len; beat++) begin
-          bit [63:0] beat_addr;
           beat_addr = trans.get_beat_addr(beat);
           m_write_addr_queue[iter].push_back(beat_addr);
           m_write_data_queue[iter].push_back(trans.m_data[beat]);
@@ -227,6 +229,19 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
     int iter, r_idx;
     int total_trans;
     int error_count;
+    // Variables for data verification (moved to task level for SV compliance)
+    int beat;
+    logic [1023:0] expected_data;
+    logic [1023:0] actual_data;
+    logic [1023:0] data_mask;
+    bit [63:0] beat_addr;
+    int data_idx;
+    int bytes_per_beat;
+    // Variables for read transaction processing
+    bit [63:0] expected_addr;
+    int expected_len;
+    bit [2:0] expected_size;
+    int data_idx_start;
 
     total_trans = m_num_iterations * m_num_writes;
     error_count = 0;
@@ -236,12 +251,6 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
 
     for (iter = 0; iter < m_num_iterations; iter++) begin
       for (r_idx = 0; r_idx < m_num_writes; r_idx++) begin
-        bit [63:0] expected_addr;
-        int expected_len;
-        bit [2:0] expected_size;
-        int data_idx_start;
-        int beat;
-
         // Get expected values from stored write transaction
         expected_addr = m_write_trans_queue[iter][r_idx].m_addr;
         expected_len = m_write_len_queue[iter][r_idx];
@@ -275,19 +284,12 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
 
         // Verify read data against stored write data
         for (beat = 0; beat <= expected_len; beat++) begin
-          logic [1023:0] expected_data;
-          logic [1023:0] actual_data;
-          bit [63:0] beat_addr;
-          int data_idx;
-
           data_idx = data_idx_start + beat;
           expected_data = m_write_data_queue[iter][data_idx];
           actual_data = trans.m_data[beat];
           beat_addr = m_write_addr_queue[iter][data_idx];
 
           // Mask data based on transfer size
-          logic [1023:0] data_mask;
-          int bytes_per_beat;
           bytes_per_beat = 1 << expected_size;
           data_mask = (bytes_per_beat >= 128) ? '1 : ((1 << (bytes_per_beat * 8)) - 1);
 
