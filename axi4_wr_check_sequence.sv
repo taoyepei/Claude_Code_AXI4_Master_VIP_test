@@ -189,21 +189,25 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
       `uvm_info(get_type_name(), $sformatf("Iteration %0d/%0d: Sending %0d write transactions",
                 iter+1, m_num_iterations, m_num_writes), UVM_MEDIUM)
 
+      `uvm_info(get_type_name(), $sformatf("DEBUG: m_use_start_addr=%0b, m_start_addr=0x%0h, current_addr=0x%0h",
+                m_use_start_addr, m_start_addr, current_addr), UVM_LOW)
+
       for (w_idx = 0; w_idx < m_num_writes; w_idx++) begin
         trans = axi4_transaction::type_id::create($sformatf("write_iter%0d_trans%0d", iter, w_idx));
 
         if (m_use_start_addr) begin
+          `uvm_info(get_type_name(), $sformatf("DEBUG: randomizing with m_addr == 0x%0h (current_addr)", current_addr), UVM_LOW)
           if (!trans.randomize() with {
             m_trans_type == WRITE;
             m_burst == m_burst_type;
-            m_len == m_min_len;  // Use exact value since user specified both min and max
+            m_len == m_min_len;
             m_size == m_transfer_size;
-            m_addr == current_addr;  // Compare full 64-bit value
+            m_addr == current_addr;
           }) begin
             `uvm_fatal(get_type_name(), "Write transaction randomization failed")
             return;
           end
-        end else begin
+          `uvm_info(get_type_name(), $sformatf("DEBUG: after randomize, trans.m_addr=0x%0h", trans.m_addr), UVM_LOW)
           if (!trans.randomize() with {
             m_trans_type == WRITE;
             m_burst == m_burst_type;
