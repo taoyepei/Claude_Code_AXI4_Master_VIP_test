@@ -184,6 +184,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       // Queue split transactions for address channel
       foreach (split_trans[i]) begin
+        `uvm_info(get_type_name(), $sformatf("DEBUG: Queueing trans type=%0s to pending", split_trans[i].m_trans_type.name()), UVM_LOW)
         if (split_trans[i].m_trans_type == WRITE) begin
           // Wait if max outstanding reached
           while (m_aw_pending.size() >= m_cfg.m_max_outstanding) begin

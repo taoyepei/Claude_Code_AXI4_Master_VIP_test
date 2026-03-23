@@ -356,6 +356,9 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
   endtask
 
   task body();
+    // Debug: print all configuration values at start
+    `uvm_info(get_type_name(), $sformatf("DEBUG body start: m_use_start_addr=%0b, m_start_addr=0x%0h, m_num_writes=%0d, m_num_iterations=%0d",
+              m_use_start_addr, m_start_addr, m_num_writes, m_num_iterations), UVM_LOW)
     // Phase 1: Write all data
     execute_write_phase();
 
