@@ -208,6 +208,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
             return;
           end
           `uvm_info(get_type_name(), $sformatf("DEBUG: after randomize, trans.m_addr=0x%0h", trans.m_addr), UVM_LOW)
+        end else begin
           if (!trans.randomize() with {
             m_trans_type == WRITE;
             m_burst == m_burst_type;
