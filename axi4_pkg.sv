@@ -131,6 +131,24 @@ package axi4_pkg;
     endfunction
   endclass
 
+  // Forward declarations - classes defined in separate include files
+  typedef class axi4_transaction;
+  typedef class axi4_sequence;
+  typedef class axi4_sequencer;
+  typedef class axi4_master_driver;
+  typedef class axi4_monitor;
+  typedef class axi4_master_agent;
+  typedef class axi4_env;
+
 endpackage : axi4_pkg
+
+// Include VIP component files (must be outside package declaration)
+`include "axi4_transaction.sv"
+`include "axi4_sequence.sv"
+`include "axi4_sequencer.sv"
+`include "axi4_master_driver.sv"
+`include "axi4_monitor.sv"
+`include "axi4_master_agent.sv"
+`include "axi4_env.sv"
 
 `endif // AXI4_PKG_SV

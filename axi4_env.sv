@@ -1,11 +1,9 @@
 `ifndef AXI4_ENV_SV
 `define AXI4_ENV_SV
 
-`include "axi4_pkg.sv"
-`include "axi4_master_agent.sv"
-`include "axi4_if.sv"
-
-import uvm_pkg::*;
+// Note: This file is included inside axi4_pkg package
+// Do not add package/import statements here
+// axi4_if is defined outside the package
 
 class axi4_env extends uvm_env;
   `uvm_component_utils(axi4_env)

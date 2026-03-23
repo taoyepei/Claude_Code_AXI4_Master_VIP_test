@@ -1,12 +1,9 @@
 `ifndef AXI4_MONITOR_SV
 `define AXI4_MONITOR_SV
 
-`include "axi4_pkg.sv"
-`include "axi4_transaction.sv"
-`include "axi4_if.sv"
-
-import uvm_pkg::*;
-import axi4_pkg::*;
+// Note: This file is included inside axi4_pkg package
+// Do not add package/import statements here
+// axi4_if is defined outside the package
 
 class axi4_monitor extends uvm_monitor;
   `uvm_component_utils(axi4_monitor)

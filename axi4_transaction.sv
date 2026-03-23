@@ -1,10 +1,8 @@
 `ifndef AXI4_TRANSACTION_SV
 `define AXI4_TRANSACTION_SV
 
-`include "axi4_pkg.sv"
-
-import uvm_pkg::*;
-import axi4_pkg::*;
+// Note: This file is included inside axi4_pkg package
+// Do not add package/import statements here
 
 class axi4_transaction extends uvm_sequence_item;
   `uvm_object_utils(axi4_transaction)
