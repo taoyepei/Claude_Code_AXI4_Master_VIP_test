@@ -16,9 +16,9 @@ class axi4_sequence extends uvm_sequence #(axi4_transaction);
   rand axi4_burst_t      m_default_burst;
   rand int               m_min_len;
   rand int               m_max_len;
-  bit [63:0]             m_start_addr;        // Starting address for first transaction (NOT rand)
-  bit                    m_use_start_addr;    // Enable address increment mode (NOT rand)
-  bit [63:0]             m_addr_increment;    // Address increment between transactions (NOT rand)
+  rand bit [63:0]        m_start_addr;        // Starting address for first transaction
+  rand bit               m_use_start_addr;    // Enable address increment mode
+  rand bit [63:0]        m_addr_increment;    // Address increment between transactions
 
   constraint c_num_trans {
     m_num_transactions inside {[1:100]};
@@ -28,6 +28,10 @@ class axi4_sequence extends uvm_sequence #(axi4_transaction);
     m_min_len >= 0;
     m_max_len <= 255;
     m_min_len <= m_max_len;
+  }
+
+  constraint c_addr_increment {
+    m_addr_increment inside {0, 64, 128, 256, 512, 1024, 2048, 4096};
   }
 
   function new(string name = "axi4_sequence");
