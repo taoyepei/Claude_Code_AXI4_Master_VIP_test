@@ -59,7 +59,13 @@ To change bus widths, edit `axi4_defines.svh`:
 
 ### 1. Basic Testbench Structure
 
+**Important**: When using VIP classes outside the package, you must import `axi4_pkg`:
+
 ```systemverilog
+import uvm_pkg::*;
+`include "uvm_macros.svh"
+import axi4_pkg::*;  // Required to use axi4_env, axi4_cfg, etc.
+
 module tb_top;
   logic aclk;
   logic areset_n;
@@ -101,6 +107,10 @@ endmodule
 #### 2.1 Read Transactions (默认)
 
 ```systemverilog
+import uvm_pkg::*;
+`include "uvm_macros.svh"
+import axi4_pkg::*;
+
 class my_read_test extends uvm_test;
   `uvm_component_utils(my_read_test)
 
@@ -150,6 +160,10 @@ endclass
 #### 2.2 Write Transactions
 
 ```systemverilog
+import uvm_pkg::*;
+`include "uvm_macros.svh"
+import axi4_pkg::*;
+
 class my_write_test extends uvm_test;
   `uvm_component_utils(my_write_test)
 
@@ -199,6 +213,10 @@ endclass
 #### 2.3 Mixed Read/Write Transactions
 
 ```systemverilog
+import uvm_pkg::*;
+`include "uvm_macros.svh"
+import axi4_pkg::*;
+
 class my_mixed_test extends uvm_test;
   `uvm_component_utils(my_mixed_test)
 
@@ -265,6 +283,10 @@ endclass
 #### 2.4 Custom Transaction Control
 
 ```systemverilog
+import uvm_pkg::*;
+`include "uvm_macros.svh"
+import axi4_pkg::*;
+
 class my_custom_test extends uvm_test;
   `uvm_component_utils(my_custom_test)
 
@@ -318,6 +340,10 @@ endclass
 Use `m_use_start_addr=1` to enable address control mode. This is useful for testing 2KB/4KB boundary splitting:
 
 ```systemverilog
+import uvm_pkg::*;
+`include "uvm_macros.svh"
+import axi4_pkg::*;
+
 class my_boundary_test extends uvm_test;
   `uvm_component_utils(my_boundary_test)
 
