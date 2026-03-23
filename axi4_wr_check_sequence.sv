@@ -148,6 +148,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
     // Variables for beat processing (moved to task level for SV compliance)
     int beat;
     bit [`AXI4_ADDR_WIDTH-1:0] beat_addr;
+    bit [63:0] full_beat_addr;  // Temporary for function return
     int max_size;
 
     // Calculate max allowed size based on data width
@@ -181,7 +182,8 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
 
       if (m_use_start_addr) begin
         // Mask start_addr to valid address width
-        current_addr = m_start_addr[`AXI4_ADDR_WIDTH-1:0] + (iter * m_num_writes * m_addr_increment[`AXI4_ADDR_WIDTH-1:0]);
+        current_addr = m_start_addr[`AXI4_ADDR_WIDTH-1:0];
+        current_addr = current_addr + (iter * m_num_writes * m_addr_increment[`AXI4_ADDR_WIDTH-1:0]);
       end
 
       `uvm_info(get_type_name(), $sformatf("Iteration %0d/%0d: Sending %0d write transactions",
@@ -196,7 +198,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
             m_burst == m_burst_type;
             m_len == m_min_len;  // Use exact value since user specified both min and max
             m_size == m_transfer_size;
-            m_addr[`AXI4_ADDR_WIDTH-1:0] == current_addr;
+            m_addr == current_addr;  // Compare full 64-bit value
           }) begin
             `uvm_fatal(get_type_name(), "Write transaction randomization failed")
             return;
@@ -220,13 +222,14 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
 
         // Calculate and store addresses for each beat
         for (beat = 0; beat <= trans.m_len; beat++) begin
-          beat_addr = trans.get_beat_addr(beat)[`AXI4_ADDR_WIDTH-1:0];
+          full_beat_addr = trans.get_beat_addr(beat);
+          beat_addr = full_beat_addr[`AXI4_ADDR_WIDTH-1:0];
           m_write_addr_queue[iter].push_back(beat_addr);
           m_write_data_queue[iter].push_back(trans.m_data[beat]);
         end
 
         `uvm_info(get_type_name(), $sformatf("Sending write [%0d][%0d]: addr=0x%0h, len=%0d, size=%0d",
-                  iter, w_idx, trans.m_addr[`AXI4_ADDR_WIDTH-1:0], trans.m_len, trans.m_size), UVM_MEDIUM)
+                  iter, w_idx, current_addr, trans.m_len, trans.m_size), UVM_MEDIUM)
 
         start_item(trans);
         finish_item(trans);
@@ -235,7 +238,9 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
           current_addr = current_addr + ((trans.m_len + 1) * bytes_per_beat);
           // Add gap if needed to avoid overlap
           if (w_idx < m_num_writes - 1) begin
-            current_addr = current_addr + m_addr_increment[`AXI4_ADDR_WIDTH-1:0];
+            bit [`AXI4_ADDR_WIDTH-1:0] addr_inc;
+            addr_inc = m_addr_increment[`AXI4_ADDR_WIDTH-1:0];
+            current_addr = current_addr + addr_inc;
           end
         end
       end
@@ -260,6 +265,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
     int bytes_per_beat;
     // Variables for read transaction processing
     bit [`AXI4_ADDR_WIDTH-1:0] expected_addr;
+    bit [63:0] full_expected_addr;  // Temporary for 64-bit address
     int expected_len;
     bit [2:0] expected_size;
     int data_idx_start;
@@ -273,7 +279,8 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
     for (iter = 0; iter < m_num_iterations; iter++) begin
       for (r_idx = 0; r_idx < m_num_writes; r_idx++) begin
         // Get expected values from stored write transaction
-        expected_addr = m_write_trans_queue[iter][r_idx].m_addr[`AXI4_ADDR_WIDTH-1:0];
+        full_expected_addr = m_write_trans_queue[iter][r_idx].m_addr;
+        expected_addr = full_expected_addr[`AXI4_ADDR_WIDTH-1:0];
         expected_len = m_write_len_queue[iter][r_idx];
         expected_size = m_write_size_queue[iter][r_idx];
 
@@ -289,7 +296,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
         if (!trans.randomize() with {
           m_trans_type == READ;
           m_burst == m_burst_type;
-          m_addr[`AXI4_ADDR_WIDTH-1:0] == expected_addr;
+          m_addr == expected_addr;  // Compare full 64-bit value
           m_len == expected_len;
           m_size == expected_size;
         }) begin
@@ -298,7 +305,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
         end
 
         `uvm_info(get_type_name(), $sformatf("Sending read [%0d][%0d]: addr=0x%0h, len=%0d, size=%0d",
-                  iter, r_idx, trans.m_addr[`AXI4_ADDR_WIDTH-1:0], trans.m_len, trans.m_size), UVM_MEDIUM)
+                  iter, r_idx, expected_addr, trans.m_len, trans.m_size), UVM_MEDIUM)
 
         start_item(trans);
         finish_item(trans);
