@@ -134,6 +134,7 @@ package axi4_pkg;
   // Forward declarations - classes defined in separate include files
   typedef class axi4_transaction;
   typedef class axi4_sequence;
+  typedef class axi4_wr_check_sequence;
   typedef class axi4_sequencer;
   typedef class axi4_master_driver;
   typedef class axi4_monitor;
@@ -143,6 +144,7 @@ package axi4_pkg;
   // Include VIP component files inside the package
   `include "axi4_transaction.sv"
   `include "axi4_sequence.sv"
+  `include "axi4_wr_check_sequence.sv"
   `include "axi4_sequencer.sv"
   `include "axi4_master_driver.sv"
   `include "axi4_monitor.sv"
