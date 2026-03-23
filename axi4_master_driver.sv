@@ -357,11 +357,14 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       `uvm_info(get_type_name(), $sformatf("AW channel: Driving awaddr=0x%0h, awid=0x%0h, awvalid=1 at time %0t", trans.m_addr, trans.m_id, $time), UVM_LOW)
 
       // Wait for address to be accepted (awready asserted)
-      // Keep awvalid high until awready is seen
-      while (1) begin
-        @(posedge m_vif.aclk);
-        if (!m_reset_done) break;
-        if (m_vif.awready) break;
+      // Check immediately in same cycle (combinational check after driving)
+      if (!m_vif.awready) begin
+        // awready not asserted yet, wait for next cycle
+        while (1) begin
+          @(posedge m_vif.aclk);
+          if (!m_reset_done) break;
+          if (m_vif.awready) break;
+        end
       end
 
       if (!m_reset_done) begin
@@ -513,11 +516,14 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       `uvm_info(get_type_name(), $sformatf("AR channel: Driving araddr=0x%0h, arid=0x%0h, arvalid=1 at time %0t", trans.m_addr, trans.m_id, $time), UVM_LOW)
 
       // Wait for address to be accepted (arready asserted)
-      // Keep arvalid high until arready is seen
-      while (1) begin
-        @(posedge m_vif.aclk);
-        if (!m_reset_done) break;
-        if (m_vif.arready) break;
+      // Check immediately in same cycle (combinational check after driving)
+      if (!m_vif.arready) begin
+        // arready not asserted yet, wait for next cycle
+        while (1) begin
+          @(posedge m_vif.aclk);
+          if (!m_reset_done) break;
+          if (m_vif.arready) break;
+        end
       end
 
       if (!m_reset_done) begin
