@@ -344,28 +344,32 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       trans = m_aw_pending.pop_front();
 
-      // Drive all AW signals together using non-blocking assignment
-      m_vif.awid    <= trans.m_id;
-      m_vif.awaddr  <= trans.m_addr;
-      m_vif.awlen   <= trans.m_len;
-      m_vif.awsize  <= trans.m_size;
-      m_vif.awburst <= trans.m_burst;
-      m_vif.awlock  <= trans.m_lock;
-      m_vif.awcache <= trans.m_cache;
-      m_vif.awprot  <= trans.m_prot;
-      m_vif.awqos   <= trans.m_qos;
-      m_vif.awregion <= trans.m_region;
-      m_vif.awuser  <= trans.m_user;
-      m_vif.awvalid <= 1'b1;
-
-      `uvm_info(get_type_name(), $sformatf("AW channel: Driving awaddr=0x%0h, awid=0x%0h, awvalid=1 at time %0t", trans.m_addr, trans.m_id, $time), UVM_LOW)
-
-      // Wait for address to be accepted (awready asserted)
-      // Must wait at least one cycle to ensure awvalid is visible
-      @(posedge m_vif.aclk);
-      while (!m_reset_done && !m_vif.awready) begin
-        @(posedge m_vif.aclk);
-      end
+      // Drive all AW signals together - use fork to maintain signals during wait
+      fork
+        begin
+          // Continuously drive AW signals until handshake completes
+          m_vif.awid    <= trans.m_id;
+          m_vif.awaddr  <= trans.m_addr;
+          m_vif.awlen   <= trans.m_len;
+          m_vif.awsize  <= trans.m_size;
+          m_vif.awburst <= trans.m_burst;
+          m_vif.awlock  <= trans.m_lock;
+          m_vif.awcache <= trans.m_cache;
+          m_vif.awprot  <= trans.m_prot;
+          m_vif.awqos   <= trans.m_qos;
+          m_vif.awregion <= trans.m_region;
+          m_vif.awuser  <= trans.m_user;
+          m_vif.awvalid <= 1'b1;
+        end
+        begin
+          // Wait for address to be accepted
+          @(posedge m_vif.aclk);
+          while (m_reset_done && !m_vif.awready) begin
+            @(posedge m_vif.aclk);
+          end
+        end
+      join_any
+      disable fork;
 
       if (!m_reset_done) begin
         m_vif.awvalid <= 1'b0;
@@ -508,28 +512,32 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       trans = m_ar_pending.pop_front();
 
-      // Drive all AR signals together using non-blocking assignment
-      m_vif.arid    <= trans.m_id;
-      m_vif.araddr  <= trans.m_addr;
-      m_vif.arlen   <= trans.m_len;
-      m_vif.arsize  <= trans.m_size;
-      m_vif.arburst <= trans.m_burst;
-      m_vif.arlock  <= trans.m_lock;
-      m_vif.arcache <= trans.m_cache;
-      m_vif.arprot  <= trans.m_prot;
-      m_vif.arqos   <= trans.m_qos;
-      m_vif.arregion <= trans.m_region;
-      m_vif.aruser  <= trans.m_user;
-      m_vif.arvalid <= 1'b1;
-
-      `uvm_info(get_type_name(), $sformatf("AR channel: Driving araddr=0x%0h, arid=0x%0h, arvalid=1 at time %0t", trans.m_addr, trans.m_id, $time), UVM_LOW)
-
-      // Wait for address to be accepted (arready asserted)
-      // Must wait at least one cycle to ensure arvalid is visible
-      @(posedge m_vif.aclk);
-      while (!m_reset_done && !m_vif.arready) begin
-        @(posedge m_vif.aclk);
-      end
+      // Drive all AR signals together - use fork to maintain signals during wait
+      fork
+        begin
+          // Continuously drive AR signals until handshake completes
+          m_vif.arid    <= trans.m_id;
+          m_vif.araddr  <= trans.m_addr;
+          m_vif.arlen   <= trans.m_len;
+          m_vif.arsize  <= trans.m_size;
+          m_vif.arburst <= trans.m_burst;
+          m_vif.arlock  <= trans.m_lock;
+          m_vif.arcache <= trans.m_cache;
+          m_vif.arprot  <= trans.m_prot;
+          m_vif.arqos   <= trans.m_qos;
+          m_vif.arregion <= trans.m_region;
+          m_vif.aruser  <= trans.m_user;
+          m_vif.arvalid <= 1'b1;
+        end
+        begin
+          // Wait for address to be accepted
+          @(posedge m_vif.aclk);
+          while (m_reset_done && !m_vif.arready) begin
+            @(posedge m_vif.aclk);
+          end
+        end
+      join_any
+      disable fork;
 
       if (!m_reset_done) begin
         m_vif.arvalid <= 1'b0;
