@@ -9,8 +9,8 @@ class axi4_transaction extends uvm_sequence_item;
 
   // Transaction identification
   rand axi4_trans_type_t m_trans_type;
-  rand logic [31:0]      m_id;
-  rand int               m_split_id;
+  rand logic [`AXI4_ID_WIDTH-1:0] m_id;
+  rand int                        m_split_id;
 
   // Address channel
   rand logic [63:0]      m_addr;

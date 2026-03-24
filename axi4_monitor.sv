@@ -15,32 +15,32 @@ class axi4_monitor extends uvm_monitor;
   uvm_analysis_port #(axi4_transaction) m_analysis_port;
 
   // Transaction tracking
-  axi4_transaction m_aw_trans[logic [31:0]];
-  axi4_transaction m_ar_trans[logic [31:0]];
+  axi4_transaction m_aw_trans[logic [`AXI4_ID_WIDTH-1:0]];
+  axi4_transaction m_ar_trans[logic [`AXI4_ID_WIDTH-1:0]];
 
   // WLAST tracking for write latency
-  time               m_wlast_time[logic [31:0]];
+  time             m_wlast_time[logic [`AXI4_ID_WIDTH-1:0]];
 
   // Statistics
-  int                m_total_trans_count;
-  int                m_write_trans_count;
-  int                m_read_trans_count;
-  longint            m_total_data_bytes;
-  time               m_first_trans_time;
-  time               m_last_trans_time;
+  int              m_total_trans_count;
+  int              m_write_trans_count;
+  int              m_read_trans_count;
+  longint          m_total_data_bytes;
+  time             m_first_trans_time;
+  time             m_last_trans_time;
 
   // Latency tracking
-  time               m_max_write_latency;
-  time               m_max_read_latency;
-  logic [31:0]       m_max_write_latency_id;
-  logic [31:0]       m_max_read_latency_id;
-  longint            m_total_write_latency;
-  longint            m_total_read_latency;
+  time             m_max_write_latency;
+  time             m_max_read_latency;
+  logic [`AXI4_ID_WIDTH-1:0] m_max_write_latency_id;
+  logic [`AXI4_ID_WIDTH-1:0] m_max_read_latency_id;
+  longint          m_total_write_latency;
+  longint          m_total_read_latency;
 
   // Timeout tracking
-  time               m_aw_accept_time[logic [31:0]];
-  time               m_ar_accept_time[logic [31:0]];
-  event              m_timeout_event;
+  time             m_aw_accept_time[logic [`AXI4_ID_WIDTH-1:0]];
+  time             m_ar_accept_time[logic [`AXI4_ID_WIDTH-1:0]];
+  event            m_timeout_event;
 
   function new(string name = "axi4_monitor", uvm_component parent);
     super.new(name, parent);
