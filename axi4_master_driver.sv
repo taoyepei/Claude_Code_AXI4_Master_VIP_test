@@ -221,7 +221,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
     int boundary_4kb;
     int end_addr;
     axi4_transaction new_trans;
-    logic [31:0] base_id;
+    logic [`AXI4_ID_WIDTH-1:0] base_id;
 
     split_trans.delete();
     base_id = trans.m_id;
@@ -555,7 +555,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
   // Drive read data channel (receive) - direct signal access
   task drive_r_channel();
-    logic [31:0] rid;
+    logic [`AXI4_ID_WIDTH-1:0] rid;
     int beat_count;
 
     forever begin

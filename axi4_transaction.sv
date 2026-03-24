@@ -13,16 +13,16 @@ class axi4_transaction extends uvm_sequence_item;
   rand int                        m_split_id;
 
   // Address channel
-  rand logic [63:0]      m_addr;
-  rand logic [7:0]       m_len;
-  rand logic [2:0]       m_size;
-  rand axi4_burst_t      m_burst;
-  rand logic             m_lock;
-  rand logic [3:0]       m_cache;
-  rand logic [2:0]       m_prot;
-  rand logic [3:0]       m_qos;
-  rand logic [3:0]       m_region;
-  rand logic [15:0]      m_user;
+  rand logic [`AXI4_ADDR_WIDTH-1:0] m_addr;
+  rand logic [7:0]                  m_len;
+  rand logic [2:0]                  m_size;
+  rand axi4_burst_t                 m_burst;
+  rand logic                        m_lock;
+  rand logic [3:0]                  m_cache;
+  rand logic [2:0]                  m_prot;
+  rand logic [3:0]                  m_qos;
+  rand logic [3:0]                  m_region;
+  rand logic [`AXI4_USER_WIDTH-1:0] m_user;
 
   // Data channel - use AXI4_DATA_WIDTH for correct bit width
   rand logic [`AXI4_DATA_WIDTH-1:0]    m_data[$];
@@ -30,9 +30,9 @@ class axi4_transaction extends uvm_sequence_item;
   rand logic [15:0]                    m_wuser[$];
 
   // Response channel
-  rand axi4_resp_t       m_resp[$];
-  rand logic [15:0]      m_buser;
-  rand logic [15:0]      m_ruser[$];
+  rand axi4_resp_t                  m_resp[$];
+  rand logic [`AXI4_USER_WIDTH-1:0] m_buser;
+  rand logic [`AXI4_USER_WIDTH-1:0] m_ruser[$];
 
   // Timing information (for statistics)
   time                   m_addr_accept_time;
@@ -294,9 +294,9 @@ class axi4_transaction extends uvm_sequence_item;
   endfunction
 
   // Calculate address for a specific beat in burst
-  function logic [63:0] get_beat_addr(int beat);
-    logic [63:0] beat_addr;
-    int          bytes_per_beat;
+  function logic [`AXI4_ADDR_WIDTH-1:0] get_beat_addr(int beat);
+    logic [`AXI4_ADDR_WIDTH-1:0] beat_addr;
+    int                          bytes_per_beat;
 
     bytes_per_beat = 1 << m_size;
 
@@ -322,9 +322,9 @@ class axi4_transaction extends uvm_sequence_item;
 
   // Check if address crosses 4KB boundary
   function bit crosses_4kb_boundary();
-    logic [63:0] end_addr;
+    logic [`AXI4_ADDR_WIDTH-1:0] end_addr;
     end_addr = get_beat_addr(m_len) + ((1 << m_size) - 1);
-    return (m_addr[63:12] != end_addr[63:12]);
+    return (m_addr[`AXI4_ADDR_WIDTH-1:12] != end_addr[`AXI4_ADDR_WIDTH-1:12]);
   endfunction
 
 endclass : axi4_transaction
