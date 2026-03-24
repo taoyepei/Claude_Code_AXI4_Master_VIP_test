@@ -92,7 +92,9 @@ class axi4_transaction extends uvm_sequence_item;
   }
 
   constraint c_data_size {
-    m_data.size() == (m_len + 1);
+    // For WRITE: m_data is filled by post_randomize
+    // For READ: m_data is filled by driver, so size starts at 0
+    m_data.size() == (m_trans_type == WRITE) ? (m_len + 1) : 0;
     m_wstrb.size() == (m_trans_type == WRITE) ? (m_len + 1) : 0;
     m_wuser.size() == (m_trans_type == WRITE) ? (m_len + 1) : 0;
     m_ruser.size() == (m_trans_type == READ) ? (m_len + 1) : 0;
@@ -105,7 +107,7 @@ class axi4_transaction extends uvm_sequence_item;
 
     // Initialize data array for WRITE transactions only
     // READ transactions will have data filled by driver
-    if (m_trans_type == WRITE && m_data.size() == 0) begin
+    if (m_trans_type == WRITE) begin
       for (int i = 0; i <= m_len; i++) begin
         m_data.push_back({$random, $random, $random, $random});
       end
