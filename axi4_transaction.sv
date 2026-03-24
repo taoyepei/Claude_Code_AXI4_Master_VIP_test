@@ -24,10 +24,10 @@ class axi4_transaction extends uvm_sequence_item;
   rand logic [3:0]       m_region;
   rand logic [15:0]      m_user;
 
-  // Data channel
-  rand logic [1023:0]    m_data[$];
-  rand logic [127:0]     m_wstrb[$];
-  rand logic [15:0]      m_wuser[$];
+  // Data channel - use AXI4_DATA_WIDTH for correct bit width
+  rand logic [`AXI4_DATA_WIDTH-1:0]    m_data[$];
+  rand logic [(`AXI4_DATA_WIDTH/8)-1:0] m_wstrb[$];
+  rand logic [15:0]                    m_wuser[$];
 
   // Response channel
   rand axi4_resp_t       m_resp[$];

@@ -315,6 +315,10 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
         start_item(trans);
         finish_item(trans);
 
+        // Wait for read response with data
+        get_response(trans);
+        `uvm_info(get_type_name(), $sformatf("Read response received with %0d beats", trans.m_data.size()), UVM_HIGH)
+
         // Verify read data against stored write data
         for (beat = 0; beat <= expected_len; beat++) begin
           data_idx = data_idx_start + beat;
