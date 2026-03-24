@@ -417,16 +417,26 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
             trans = m_w_queue.pop_front();
 
             for (int beat = 0; beat <= trans.m_len && m_reset_done; beat++) begin
-              m_vif.wdata <= trans.m_data[beat];
-              m_vif.wstrb <= trans.m_wstrb[beat];
-              m_vif.wlast <= (beat == trans.m_len);
-              m_vif.wuser <= trans.m_wuser[beat];
-              m_vif.wvalid <= 1'b1;
+              // Use fork to maintain W signals stable during handshake wait
+              fork
+                begin
+                  // Continuously drive W signals
+                  m_vif.wdata <= trans.m_data[beat];
+                  m_vif.wstrb <= trans.m_wstrb[beat];
+                  m_vif.wlast <= (beat == trans.m_len);
+                  m_vif.wuser <= trans.m_wuser[beat];
+                  m_vif.wvalid <= 1'b1;
+                end
+                begin
+                  // Wait for data to be accepted
+                  @(posedge m_vif.aclk);
+                  while (m_reset_done && !m_vif.wready) begin
+                    @(posedge m_vif.aclk);
+                  end
+                end
+              join_any
+              disable fork;
 
-              @(posedge m_vif.aclk);
-              while (!m_vif.wready && m_reset_done) begin
-                @(posedge m_vif.aclk);
-              end
               if (!m_reset_done) break;
             end
 
@@ -443,16 +453,26 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
             trans = m_w_queue.pop_front();
 
             for (int beat = 0; beat <= trans.m_len && m_reset_done; beat++) begin
-              m_vif.wdata <= trans.m_data[beat];
-              m_vif.wstrb <= trans.m_wstrb[beat];
-              m_vif.wlast <= (beat == trans.m_len);
-              m_vif.wuser <= trans.m_wuser[beat];
-              m_vif.wvalid <= 1'b1;
+              // Use fork to maintain W signals stable during handshake wait
+              fork
+                begin
+                  // Continuously drive W signals
+                  m_vif.wdata <= trans.m_data[beat];
+                  m_vif.wstrb <= trans.m_wstrb[beat];
+                  m_vif.wlast <= (beat == trans.m_len);
+                  m_vif.wuser <= trans.m_wuser[beat];
+                  m_vif.wvalid <= 1'b1;
+                end
+                begin
+                  // Wait for data to be accepted
+                  @(posedge m_vif.aclk);
+                  while (m_reset_done && !m_vif.wready) begin
+                    @(posedge m_vif.aclk);
+                  end
+                end
+              join_any
+              disable fork;
 
-              @(posedge m_vif.aclk);
-              while (!m_vif.wready && m_reset_done) begin
-                @(posedge m_vif.aclk);
-              end
               if (!m_reset_done) break;
             end
 
