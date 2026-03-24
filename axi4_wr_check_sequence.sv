@@ -203,6 +203,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
             m_len == m_min_len;
             m_size == m_transfer_size;
             m_addr == current_addr;
+            m_id == w_idx;  // Use consistent ID for write
           }) begin
             `uvm_fatal(get_type_name(), "Write transaction randomization failed")
             return;
@@ -214,6 +215,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
             m_burst == m_burst_type;
             m_len == m_min_len;
             m_size == m_transfer_size;
+            m_id == w_idx;  // Use consistent ID for write
           }) begin
             `uvm_fatal(get_type_name(), "Write transaction randomization failed")
             return;
@@ -301,9 +303,10 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
         if (!trans.randomize() with {
           m_trans_type == READ;
           m_burst == m_burst_type;
-          m_addr == expected_addr;  // Compare full 64-bit value
+          m_addr == expected_addr;
           m_len == expected_len;
           m_size == expected_size;
+          m_id == r_idx;  // Use same ID as write for matching
         }) begin
           `uvm_fatal(get_type_name(), "Read transaction randomization failed")
           return;

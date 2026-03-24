@@ -378,6 +378,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       `uvm_info(get_type_name(), $sformatf("AW channel: Address 0x%0h accepted at time %0t", trans.m_addr, $time), UVM_LOW)
 
       // Track for write completion
+      `uvm_info(get_type_name(), $sformatf("DEBUG AW: Storing trans with id=%0d in m_b_pending", trans.m_id), UVM_LOW)
       m_b_pending[trans.m_id] = trans;
 
       // Queue for W channel
@@ -477,12 +478,16 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       m_vif.bready <= 1'b1;
 
       if (m_vif.bvalid) begin
+        `uvm_info(get_type_name(), $sformatf("DEBUG B: bvalid=1, bid=%0d, bresp=%0d", m_vif.bid, m_vif.bresp), UVM_LOW)
         if (m_b_pending.exists(m_vif.bid)) begin
           axi4_transaction trans = m_b_pending[m_vif.bid];
           trans.m_resp_accept_time = $time;
           // Send response back to sequence
+          `uvm_info(get_type_name(), $sformatf("DEBUG B: put_response for bid=%0d", m_vif.bid), UVM_LOW)
           seq_item_port.put_response(trans);
           m_b_pending.delete(m_vif.bid);
+        end else begin
+          `uvm_warning(get_type_name(), $sformatf("DEBUG B: bid=%0d not found in m_b_pending", m_vif.bid))
         end
       end
     end
@@ -536,6 +541,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       `uvm_info(get_type_name(), $sformatf("AR channel: Address 0x%0h accepted at time %0t", trans.m_addr, $time), UVM_LOW)
 
+      `uvm_info(get_type_name(), $sformatf("DEBUG AR: Storing trans with id=%0d in m_r_pending", trans.m_id), UVM_LOW)
       // Store for tracking read data
       m_r_pending[trans.m_id] = trans;
 
@@ -564,6 +570,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       m_vif.rready <= 1'b1;
 
       if (m_vif.rvalid) begin
+        `uvm_info(get_type_name(), $sformatf("DEBUG R: rvalid=1, rid=%0d, rlast=%0b", m_vif.rid, m_vif.rlast), UVM_HIGH)
         // Track read data
         if (m_r_pending.exists(m_vif.rid)) begin
           axi4_transaction trans = m_r_pending[m_vif.rid];
