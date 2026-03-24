@@ -103,8 +103,9 @@ class axi4_transaction extends uvm_sequence_item;
     int bytes_per_beat;
     bytes_per_beat = 1 << m_size;
 
-    // Initialize data array if empty
-    if (m_data.size() == 0) begin
+    // Initialize data array for WRITE transactions only
+    // READ transactions will have data filled by driver
+    if (m_trans_type == WRITE && m_data.size() == 0) begin
       for (int i = 0; i <= m_len; i++) begin
         m_data.push_back({$random, $random, $random, $random});
       end
