@@ -19,6 +19,9 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   // Write response tracking (ID -> transaction)
   axi4_transaction m_b_pending[logic [31:0]];
 
+  // Read transaction tracking (ID -> transaction)
+  axi4_transaction m_r_pending[logic [31:0]];
+
   // Split transaction ID allocation
   int m_next_split_id;
 
@@ -475,6 +478,10 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       if (m_vif.bvalid) begin
         if (m_b_pending.exists(m_vif.bid)) begin
+          axi4_transaction trans = m_b_pending[m_vif.bid];
+          trans.m_resp_accept_time = $time;
+          // Send response back to sequence
+          seq_item_port.put_response(trans);
           m_b_pending.delete(m_vif.bid);
         end
       end
@@ -529,6 +536,9 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       `uvm_info(get_type_name(), $sformatf("AR channel: Address 0x%0h accepted at time %0t", trans.m_addr, $time), UVM_LOW)
 
+      // Store for tracking read data
+      m_r_pending[trans.m_id] = trans;
+
       // Transaction interval - wait specified cycles before next transaction
       repeat (m_trans_interval) begin
         @(posedge m_vif.aclk);
@@ -540,6 +550,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   // Drive read data channel (receive) - direct signal access
   task drive_r_channel();
     logic [31:0] rid;
+    int beat_count;
 
     forever begin
       @(posedge m_vif.aclk);
@@ -552,9 +563,28 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       m_vif.rready <= 1'b1;
 
-      if (m_vif.rvalid && m_vif.rlast) begin
-        // Read transaction completed
-        rid = m_vif.rid;
+      if (m_vif.rvalid) begin
+        // Track read data
+        if (m_r_pending.exists(m_vif.rid)) begin
+          axi4_transaction trans = m_r_pending[m_vif.rid];
+          // Store the read data in the transaction
+          int beat = trans.m_data.size();
+          trans.m_data.push_back(m_vif.rdata);
+          trans.m_resp.push_back(m_vif.rresp);
+          trans.m_ruser.push_back(m_vif.ruser);
+
+          `uvm_info(get_type_name(), $sformatf("R channel: Received data for ID=%0d, beat=%0d, data=0x%0h", m_vif.rid, beat, m_vif.rdata), UVM_HIGH)
+
+          if (m_vif.rlast) begin
+            // Read transaction completed, send response back to sequence
+            trans.m_data_complete_time = $time;
+            seq_item_port.put_response(trans);
+            m_r_pending.delete(m_vif.rid);
+            `uvm_info(get_type_name(), $sformatf("R channel: Read transaction ID=%0d completed with %0d beats", m_vif.rid, trans.m_data.size()), UVM_LOW)
+          end
+        end else begin
+          `uvm_warning(get_type_name(), $sformatf("R channel: Received data for unknown ID=%0d", m_vif.rid))
+        end
       end
     end
   endtask
