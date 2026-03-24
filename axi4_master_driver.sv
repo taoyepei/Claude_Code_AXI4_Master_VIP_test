@@ -17,10 +17,10 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   axi4_transaction m_w_queue[$];
 
   // Write response tracking (ID -> transaction)
-  axi4_transaction m_b_pending[logic [31:0]];
+  axi4_transaction m_b_pending[logic [`AXI4_ID_WIDTH-1:0]];
 
   // Read transaction tracking (ID -> transaction)
-  axi4_transaction m_r_pending[logic [31:0]];
+  axi4_transaction m_r_pending[logic [`AXI4_ID_WIDTH-1:0]];
 
   // Split transaction ID allocation
   int m_next_split_id;
