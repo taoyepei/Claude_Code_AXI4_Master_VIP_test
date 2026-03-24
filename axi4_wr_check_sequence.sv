@@ -44,7 +44,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
   bit [2:0]        m_write_size_queue[$][$];    // [iteration][size per trans]
 
   constraint c_num_writes {
-    m_num_writes inside {[1:100]};
+    m_num_writes inside {[1:10000]};
   }
 
   constraint c_num_iterations {
