@@ -114,7 +114,7 @@ class axi4_monitor extends uvm_monitor;
 
   // Monitor write data channel
   task monitor_w_channel();
-    logic [31:0] current_wid;
+    logic [`AXI4_ID_WIDTH-1:0] current_wid;
 
     forever begin
       @(m_vif.mon_cb);
