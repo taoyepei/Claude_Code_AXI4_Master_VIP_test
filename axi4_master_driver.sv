@@ -22,6 +22,12 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   // Read transaction tracking (queue of outstanding read transactions)
   axi4_transaction m_r_pending[$];
 
+  // Original read transaction tracking for split transactions
+  // Key: base_id (original transaction's ID), Value: original transaction
+  axi4_transaction m_r_orig_pending[logic [`AXI4_ID_WIDTH-1:0]];
+  // Track number of pending split transactions per original read
+  int m_r_split_count[logic [`AXI4_ID_WIDTH-1:0]];
+
   // Split transaction ID allocation
   int m_next_split_id;
 
@@ -187,6 +193,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   task get_and_drive();
     axi4_transaction trans;
     axi4_transaction split_trans[$];
+    logic [`AXI4_ID_WIDTH-1:0] base_id;
 
     forever begin
       // Wait for reset to be done
@@ -194,7 +201,23 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       seq_item_port.get_next_item(trans);
 
+      // Store base_id before split (original transaction ID)
+      base_id = trans.m_id;
+
       split_transaction(trans, split_trans);
+
+      // For read transactions with splits, store original transaction for later merging
+      if (trans.m_trans_type == READ && split_trans.size() > 1) begin
+        // Store original transaction and expected split count
+        axi4_transaction orig_trans;
+        orig_trans = axi4_transaction::type_id::create("orig_read_trans");
+        orig_trans.copy(trans);
+        orig_trans.set_sequence_id(trans.get_sequence_id());
+        orig_trans.m_data.delete();  // Clear data, will be filled from responses
+        m_r_orig_pending[base_id] = orig_trans;
+        m_r_split_count[base_id] = split_trans.size();
+        `uvm_info(get_type_name(), $sformatf("DEBUG: Stored original read trans with base_id=%0d, expecting %0d splits", base_id, split_trans.size()), UVM_LOW)
+      end
 
       // Queue split transactions for address channel
       foreach (split_trans[i]) begin
@@ -599,11 +622,66 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
           `uvm_info(get_type_name(), $sformatf("R channel: Received data for ID=%0d, beat=%0d, data=0x%0h", m_vif.rid, beat, m_vif.rdata), UVM_HIGH)
 
           if (m_vif.rlast) begin
-            // Read transaction completed, send response back to sequence
+            // Read transaction completed
             trans.m_data_complete_time = $time;
-            seq_item_port.put_response(trans);
             m_r_pending.delete(found_idx);
             `uvm_info(get_type_name(), $sformatf("R channel: Read transaction ID=%0d completed with %0d beats", m_vif.rid, trans.m_data.size()), UVM_LOW)
+
+            // Check if this is part of a split transaction
+            // Find base_id by checking which original transaction's split has this ID
+            // Split IDs are: base_id, base_id+1, base_id+2, ...
+            // We need to find the base_id such that trans.m_id >= base_id and trans.m_id < base_id + split_count
+            begin
+              logic [`AXI4_ID_WIDTH-1:0] base_id;
+              bit found_base;
+              found_base = 0;
+              base_id = 0;
+
+              // Search for matching base_id in original pending
+              // Since split IDs are sequential starting from base_id, we check if this trans.m_id could be a split
+              foreach (m_r_orig_pending[orig_id]) begin
+                if (m_r_split_count.exists(orig_id)) begin
+                  int expected_splits = m_r_split_count[orig_id];
+                  // Check if this transaction ID falls within the split range
+                  if (trans.m_id >= orig_id && trans.m_id < orig_id + expected_splits) begin
+                    base_id = orig_id;
+                    found_base = 1;
+                    break;
+                  end
+                end
+              end
+
+              if (found_base) begin
+                // This is a split transaction, accumulate data to original
+                axi4_transaction orig_trans = m_r_orig_pending[base_id];
+                // Append data from this split to original
+                foreach (trans.m_data[i]) begin
+                  orig_trans.m_data.push_back(trans.m_data[i]);
+                end
+                foreach (trans.m_resp[i]) begin
+                  orig_trans.m_resp.push_back(trans.m_resp[i]);
+                end
+                foreach (trans.m_ruser[i]) begin
+                  orig_trans.m_ruser.push_back(trans.m_ruser[i]);
+                end
+
+                // Decrement pending split count
+                m_r_split_count[base_id]--;
+                `uvm_info(get_type_name(), $sformatf("DEBUG R: Accumulated split ID=%0d to base_id=%0d, remaining splits=%0d, total beats=%0d", trans.m_id, base_id, m_r_split_count[base_id], orig_trans.m_data.size()), UVM_LOW)
+
+                // If all splits received, return original transaction
+                if (m_r_split_count[base_id] == 0) begin
+                  orig_trans.m_data_complete_time = $time;
+                  seq_item_port.put_response(orig_trans);
+                  `uvm_info(get_type_name(), $sformatf("R channel: All splits complete for base_id=%0d, returning original with %0d beats", base_id, orig_trans.m_data.size()), UVM_LOW)
+                  m_r_orig_pending.delete(base_id);
+                  m_r_split_count.delete(base_id);
+                end
+              end else begin
+                // Not a split transaction, return directly
+                seq_item_port.put_response(trans);
+              end
+            end
           end
         end else begin
           `uvm_warning(get_type_name(), $sformatf("R channel: Received data for unknown ID=%0d", m_vif.rid))
