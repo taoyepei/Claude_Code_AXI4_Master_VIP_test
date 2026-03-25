@@ -129,6 +129,9 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
     if (m_check_size_valid && !check_size_valid()) begin
       `uvm_fatal(get_type_name(), "Size configuration check failed - aborting sequence")
     end
+
+    // Set large response queue size to handle split transactions
+    set_response_queue_depth(10000);
   endtask
 
   task pre_body();
@@ -200,22 +203,20 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
           if (!trans.randomize() with {
             m_trans_type == WRITE;
             m_burst == m_burst_type;
-            m_len == m_min_len;
+            m_len inside {[m_min_len:m_max_len]};
             m_size == m_transfer_size;
             m_addr == current_addr;
-            m_id == w_idx;  // Use consistent ID for write
           }) begin
             `uvm_fatal(get_type_name(), "Write transaction randomization failed")
             return;
           end
-          `uvm_info(get_type_name(), $sformatf("DEBUG: after randomize, trans.m_addr=0x%0h", trans.m_addr), UVM_LOW)
+          `uvm_info(get_type_name(), $sformatf("DEBUG: after randomize, trans.m_addr=0x%0h, trans.m_id=%0d", trans.m_addr, trans.m_id), UVM_LOW)
         end else begin
           if (!trans.randomize() with {
             m_trans_type == WRITE;
             m_burst == m_burst_type;
-            m_len == m_min_len;
+            m_len inside {[m_min_len:m_max_len]};
             m_size == m_transfer_size;
-            m_id == w_idx;  // Use consistent ID for write
           }) begin
             `uvm_fatal(get_type_name(), "Write transaction randomization failed")
             return;
@@ -276,6 +277,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
     int expected_len;
     bit [2:0] expected_size;
     int data_idx_start;
+    bit [`AXI4_ID_WIDTH-1:0] write_id;
 
     total_trans = m_num_iterations * m_num_writes;
     error_count = 0;
@@ -297,7 +299,10 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
           data_idx_start += m_write_len_queue[iter][i] + 1;
         end
 
-        // Create read transaction
+        // Create read transaction with same ID as write transaction
+        // Get the write transaction's actual ID (may be random, not sequential)
+        write_id = m_write_trans_queue[iter][r_idx].m_id;
+
         trans = axi4_transaction::type_id::create($sformatf("read_iter%0d_trans%0d", iter, r_idx));
 
         if (!trans.randomize() with {
@@ -306,7 +311,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
           m_addr == expected_addr;
           m_len == expected_len;
           m_size == expected_size;
-          m_id == r_idx;  // Use same ID as write for matching
+          m_id == write_id;  // Use the actual write transaction's ID
         }) begin
           `uvm_fatal(get_type_name(), "Read transaction randomization failed")
           return;

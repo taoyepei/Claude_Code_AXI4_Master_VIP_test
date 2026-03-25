@@ -16,17 +16,28 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   axi4_transaction m_ar_pending[$];
   axi4_transaction m_w_queue[$];
 
-  // Write response tracking (ID -> transaction)
-  axi4_transaction m_b_pending[logic [`AXI4_ID_WIDTH-1:0]];
+  // Write response tracking (queue of outstanding write transactions)
+  axi4_transaction m_b_pending[$];
 
-  // Read transaction tracking (ID -> transaction)
-  axi4_transaction m_r_pending[logic [`AXI4_ID_WIDTH-1:0]];
+  // Read transaction tracking (queue of outstanding read transactions)
+  axi4_transaction m_r_pending[$];
 
   // Split transaction ID allocation
   int m_next_split_id;
 
   // Timing control
   int m_trans_interval;
+
+  // Helper function to find transaction by ID in queue
+  function int find_trans_by_id(ref axi4_transaction trans_queue[$], input logic [`AXI4_ID_WIDTH-1:0] id, ref axi4_transaction found_trans);
+    foreach (trans_queue[i]) begin
+      if (trans_queue[i].m_id == id) begin
+        found_trans = trans_queue[i];
+        return i;  // Return index if found
+      end
+    end
+    return -1;  // Not found
+  endfunction
 
   // Reset done flag
   bit m_reset_done;
@@ -299,6 +310,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       new_trans = axi4_transaction::type_id::create($sformatf("split_trans_%0d", m_next_split_id));
       new_trans.copy(trans);
+      new_trans.set_sequence_id(trans.get_sequence_id());  // Copy sequence_id for response routing
       new_trans.m_addr = current_addr;
       new_trans.m_len = len_this_burst;
       new_trans.m_split_id = m_next_split_id;
@@ -344,32 +356,25 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       trans = m_aw_pending.pop_front();
 
-      // Drive all AW signals together - use fork to maintain signals during wait
-      fork
-        begin
-          // Continuously drive AW signals until handshake completes
-          m_vif.awid    <= trans.m_id;
-          m_vif.awaddr  <= trans.m_addr;
-          m_vif.awlen   <= trans.m_len;
-          m_vif.awsize  <= trans.m_size;
-          m_vif.awburst <= trans.m_burst;
-          m_vif.awlock  <= trans.m_lock;
-          m_vif.awcache <= trans.m_cache;
-          m_vif.awprot  <= trans.m_prot;
-          m_vif.awqos   <= trans.m_qos;
-          m_vif.awregion <= trans.m_region;
-          m_vif.awuser  <= trans.m_user;
-          m_vif.awvalid <= 1'b1;
-        end
-        begin
-          // Wait for address to be accepted
-          @(posedge m_vif.aclk);
-          while (m_reset_done && !m_vif.awready) begin
-            @(posedge m_vif.aclk);
-          end
-        end
-      join_any
-      disable fork;
+      // Drive all AW signals together
+      m_vif.awid    <= trans.m_id;
+      m_vif.awaddr  <= trans.m_addr;
+      m_vif.awlen   <= trans.m_len;
+      m_vif.awsize  <= trans.m_size;
+      m_vif.awburst <= trans.m_burst;
+      m_vif.awlock  <= trans.m_lock;
+      m_vif.awcache <= trans.m_cache;
+      m_vif.awprot  <= trans.m_prot;
+      m_vif.awqos   <= trans.m_qos;
+      m_vif.awregion <= trans.m_region;
+      m_vif.awuser  <= trans.m_user;
+      m_vif.awvalid <= 1'b1;
+
+      // Wait for address to be accepted
+      @(posedge m_vif.aclk);
+      while (m_reset_done && !m_vif.awready) begin
+        @(posedge m_vif.aclk);
+      end
 
       if (!m_reset_done) begin
         m_vif.awvalid <= 1'b0;
@@ -383,7 +388,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       // Track for write completion
       `uvm_info(get_type_name(), $sformatf("DEBUG AW: Storing trans with id=%0d in m_b_pending", trans.m_id), UVM_LOW)
-      m_b_pending[trans.m_id] = trans;
+      m_b_pending.push_back(trans);
 
       // Queue for W channel
       m_w_queue.push_back(trans);
@@ -417,25 +422,18 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
             trans = m_w_queue.pop_front();
 
             for (int beat = 0; beat <= trans.m_len && m_reset_done; beat++) begin
-              // Use fork to maintain W signals stable during handshake wait
-              fork
-                begin
-                  // Continuously drive W signals
-                  m_vif.wdata <= trans.m_data[beat];
-                  m_vif.wstrb <= trans.m_wstrb[beat];
-                  m_vif.wlast <= (beat == trans.m_len);
-                  m_vif.wuser <= trans.m_wuser[beat];
-                  m_vif.wvalid <= 1'b1;
-                end
-                begin
-                  // Wait for data to be accepted
-                  @(posedge m_vif.aclk);
-                  while (m_reset_done && !m_vif.wready) begin
-                    @(posedge m_vif.aclk);
-                  end
-                end
-              join_any
-              disable fork;
+              // Drive W signals
+              m_vif.wdata <= trans.m_data[beat];
+              m_vif.wstrb <= trans.m_wstrb[beat];
+              m_vif.wlast <= (beat == trans.m_len);
+              m_vif.wuser <= trans.m_wuser[beat];
+              m_vif.wvalid <= 1'b1;
+
+              // Wait for data to be accepted
+              @(posedge m_vif.aclk);
+              while (m_reset_done && !m_vif.wready) begin
+                @(posedge m_vif.aclk);
+              end
 
               if (!m_reset_done) break;
             end
@@ -453,25 +451,18 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
             trans = m_w_queue.pop_front();
 
             for (int beat = 0; beat <= trans.m_len && m_reset_done; beat++) begin
-              // Use fork to maintain W signals stable during handshake wait
-              fork
-                begin
-                  // Continuously drive W signals
-                  m_vif.wdata <= trans.m_data[beat];
-                  m_vif.wstrb <= trans.m_wstrb[beat];
-                  m_vif.wlast <= (beat == trans.m_len);
-                  m_vif.wuser <= trans.m_wuser[beat];
-                  m_vif.wvalid <= 1'b1;
-                end
-                begin
-                  // Wait for data to be accepted
-                  @(posedge m_vif.aclk);
-                  while (m_reset_done && !m_vif.wready) begin
-                    @(posedge m_vif.aclk);
-                  end
-                end
-              join_any
-              disable fork;
+              // Drive W signals
+              m_vif.wdata <= trans.m_data[beat];
+              m_vif.wstrb <= trans.m_wstrb[beat];
+              m_vif.wlast <= (beat == trans.m_len);
+              m_vif.wuser <= trans.m_wuser[beat];
+              m_vif.wvalid <= 1'b1;
+
+              // Wait for data to be accepted
+              @(posedge m_vif.aclk);
+              while (m_reset_done && !m_vif.wready) begin
+                @(posedge m_vif.aclk);
+              end
 
               if (!m_reset_done) break;
             end
@@ -502,14 +493,16 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       m_vif.bready <= 1'b1;
 
       if (m_vif.bvalid) begin
+        axi4_transaction trans;
+        int found_idx;
         `uvm_info(get_type_name(), $sformatf("DEBUG B: bvalid=1, bid=%0d, bresp=%0d", m_vif.bid, m_vif.bresp), UVM_LOW)
-        if (m_b_pending.exists(m_vif.bid)) begin
-          axi4_transaction trans = m_b_pending[m_vif.bid];
+        found_idx = find_trans_by_id(m_b_pending, m_vif.bid, trans);
+        if (found_idx >= 0) begin
           trans.m_resp_accept_time = $time;
           // Send response back to sequence
           `uvm_info(get_type_name(), $sformatf("DEBUG B: put_response for bid=%0d", m_vif.bid), UVM_LOW)
           seq_item_port.put_response(trans);
-          m_b_pending.delete(m_vif.bid);
+          m_b_pending.delete(found_idx);
         end else begin
           `uvm_warning(get_type_name(), $sformatf("DEBUG B: bid=%0d not found in m_b_pending", m_vif.bid))
         end
@@ -532,32 +525,25 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       trans = m_ar_pending.pop_front();
 
-      // Drive all AR signals together - use fork to maintain signals during wait
-      fork
-        begin
-          // Continuously drive AR signals until handshake completes
-          m_vif.arid    <= trans.m_id;
-          m_vif.araddr  <= trans.m_addr;
-          m_vif.arlen   <= trans.m_len;
-          m_vif.arsize  <= trans.m_size;
-          m_vif.arburst <= trans.m_burst;
-          m_vif.arlock  <= trans.m_lock;
-          m_vif.arcache <= trans.m_cache;
-          m_vif.arprot  <= trans.m_prot;
-          m_vif.arqos   <= trans.m_qos;
-          m_vif.arregion <= trans.m_region;
-          m_vif.aruser  <= trans.m_user;
-          m_vif.arvalid <= 1'b1;
-        end
-        begin
-          // Wait for address to be accepted
-          @(posedge m_vif.aclk);
-          while (m_reset_done && !m_vif.arready) begin
-            @(posedge m_vif.aclk);
-          end
-        end
-      join_any
-      disable fork;
+      // Drive all AR signals together
+      m_vif.arid    <= trans.m_id;
+      m_vif.araddr  <= trans.m_addr;
+      m_vif.arlen   <= trans.m_len;
+      m_vif.arsize  <= trans.m_size;
+      m_vif.arburst <= trans.m_burst;
+      m_vif.arlock  <= trans.m_lock;
+      m_vif.arcache <= trans.m_cache;
+      m_vif.arprot  <= trans.m_prot;
+      m_vif.arqos   <= trans.m_qos;
+      m_vif.arregion <= trans.m_region;
+      m_vif.aruser  <= trans.m_user;
+      m_vif.arvalid <= 1'b1;
+
+      // Wait for address to be accepted
+      @(posedge m_vif.aclk);
+      while (m_reset_done && !m_vif.arready) begin
+        @(posedge m_vif.aclk);
+      end
 
       if (!m_reset_done) begin
         m_vif.arvalid <= 1'b0;
@@ -571,7 +557,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       `uvm_info(get_type_name(), $sformatf("DEBUG AR: Storing trans with id=%0d in m_r_pending", trans.m_id), UVM_LOW)
       // Store for tracking read data
-      m_r_pending[trans.m_id] = trans;
+      m_r_pending.push_back(trans);
 
       // Transaction interval - wait specified cycles before next transaction
       repeat (m_trans_interval) begin
@@ -598,10 +584,12 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       m_vif.rready <= 1'b1;
 
       if (m_vif.rvalid) begin
+        axi4_transaction trans;
+        int found_idx;
         `uvm_info(get_type_name(), $sformatf("DEBUG R: rvalid=1, rid=%0d, rlast=%0b", m_vif.rid, m_vif.rlast), UVM_HIGH)
         // Track read data
-        if (m_r_pending.exists(m_vif.rid)) begin
-          axi4_transaction trans = m_r_pending[m_vif.rid];
+        found_idx = find_trans_by_id(m_r_pending, m_vif.rid, trans);
+        if (found_idx >= 0) begin
           // Store the read data in the transaction
           int beat = trans.m_data.size();
           trans.m_data.push_back(m_vif.rdata);
@@ -614,7 +602,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
             // Read transaction completed, send response back to sequence
             trans.m_data_complete_time = $time;
             seq_item_port.put_response(trans);
-            m_r_pending.delete(m_vif.rid);
+            m_r_pending.delete(found_idx);
             `uvm_info(get_type_name(), $sformatf("R channel: Read transaction ID=%0d completed with %0d beats", m_vif.rid, trans.m_data.size()), UVM_LOW)
           end
         end else begin
