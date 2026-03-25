@@ -35,6 +35,9 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
   rand bit        m_use_start_addr;
   rand bit [63:0] m_addr_increment;
 
+  // Transaction ID counter for unique IDs across all transactions
+  bit [`AXI4_ID_WIDTH-1:0] m_next_trans_id;
+
   // Storage for write transactions (for later readback verification)
   // Use queues indexed by iteration
   axi4_transaction m_write_trans_queue[$][$];  // [iteration][transaction]
@@ -83,6 +86,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
     m_start_addr = 64'h0;
     m_use_start_addr = 0;
     m_addr_increment = 64'h1000;
+    m_next_trans_id = 0;
   endfunction
 
   // Check if the configured size is valid
@@ -198,6 +202,9 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
       for (w_idx = 0; w_idx < m_num_writes; w_idx++) begin
         trans = axi4_transaction::type_id::create($sformatf("write_iter%0d_trans%0d", iter, w_idx));
 
+        // Assign unique ID to each transaction (wrap around if exceeds ID width)
+        m_next_trans_id = (m_next_trans_id + 1) % (1 << `AXI4_ID_WIDTH);
+
         if (m_use_start_addr) begin
           `uvm_info(get_type_name(), $sformatf("DEBUG: randomizing with m_addr == 0x%0h (current_addr)", current_addr), UVM_LOW)
           if (!trans.randomize() with {
@@ -206,6 +213,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
             m_len inside {[m_min_len:m_max_len]};
             m_size == m_transfer_size;
             m_addr == current_addr;
+            m_id == m_next_trans_id;
           }) begin
             `uvm_fatal(get_type_name(), "Write transaction randomization failed")
             return;
@@ -217,6 +225,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
             m_burst == m_burst_type;
             m_len inside {[m_min_len:m_max_len]};
             m_size == m_transfer_size;
+            m_id == m_next_trans_id;
           }) begin
             `uvm_fatal(get_type_name(), "Write transaction randomization failed")
             return;
