@@ -46,6 +46,11 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
   int              m_write_len_queue[$][$];     // [iteration][length per trans]
   bit [2:0]        m_write_size_queue[$][$];    // [iteration][size per trans]
 
+  // Address-to-data mapping for verification (key: address, value: expected data)
+  // This avoids dependency on transaction ID which may change due to splitting
+  logic [`AXI4_DATA_WIDTH-1:0] m_addr_data_map[bit [`AXI4_ADDR_WIDTH-1:0]];
+  bit [2:0] m_addr_size_map[bit [`AXI4_ADDR_WIDTH-1:0]];  // Store size for each address
+
   constraint c_num_writes {
     m_num_writes inside {[1:10000]};
   }
@@ -243,6 +248,9 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
           beat_addr = full_beat_addr[`AXI4_ADDR_WIDTH-1:0];
           m_write_addr_queue[iter].push_back(beat_addr);
           m_write_data_queue[iter].push_back(trans.m_data[beat]);
+          // Store address-to-data mapping for verification (avoids ID dependency)
+          m_addr_data_map[beat_addr] = trans.m_data[beat];
+          m_addr_size_map[beat_addr] = trans.m_size;
         end
 
         `uvm_info(get_type_name(), $sformatf("Sending write [%0d][%0d]: addr=0x%0h, len=%0d, size=%0d",
@@ -336,30 +344,41 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
         get_response(trans);
         `uvm_info(get_type_name(), $sformatf("Read response received with %0d beats", trans.m_data.size()), UVM_HIGH)
 
-        // Verify read data against stored write data
-        for (beat = 0; beat <= expected_len; beat++) begin
-          data_idx = data_idx_start + beat;
-          expected_data = m_write_data_queue[iter][data_idx];
+        // Verify read data using address-data mapping (avoids ID dependency)
+        for (beat = 0; beat < trans.m_data.size(); beat++) begin
+          // Calculate actual beat address from read transaction
+          full_beat_addr = trans.get_beat_addr(beat);
+          beat_addr = full_beat_addr[`AXI4_ADDR_WIDTH-1:0];
           actual_data = trans.m_data[beat];
-          beat_addr = m_write_addr_queue[iter][data_idx];
 
-          // Mask data based on transfer size
-          bytes_per_beat = 1 << expected_size;
-          if (bytes_per_beat * 8 >= `AXI4_DATA_WIDTH) begin
-            data_mask = '1;
+          // Look up expected data by address
+          if (m_addr_data_map.exists(beat_addr)) begin
+            expected_data = m_addr_data_map[beat_addr];
+            expected_size = m_addr_size_map[beat_addr];
+
+            // Mask data based on transfer size
+            bytes_per_beat = 1 << expected_size;
+            if (bytes_per_beat * 8 >= `AXI4_DATA_WIDTH) begin
+              data_mask = '1;
+            end else begin
+              data_mask = (1 << (bytes_per_beat * 8)) - 1;
+            end
+
+            if ((expected_data & data_mask) !== (actual_data & data_mask)) begin
+              `uvm_error(get_type_name(),
+                $sformatf("DATA MISMATCH! iter=%0d, trans=%0d, beat=%0d, addr=0x%0h\n  Expected: 0x%0h\n  Actual:   0x%0h",
+                          iter, r_idx, beat, beat_addr, expected_data & data_mask, actual_data & data_mask))
+              error_count++;
+            end else begin
+              `uvm_info(get_type_name(),
+                $sformatf("Data match: iter=%0d, trans=%0d, beat=%0d, addr=0x%0h, data=0x%0h",
+                          iter, r_idx, beat, beat_addr, actual_data & data_mask), UVM_HIGH)
+            end
           end else begin
-            data_mask = (1 << (bytes_per_beat * 8)) - 1;
-          end
-
-          if ((expected_data & data_mask) !== (actual_data & data_mask)) begin
             `uvm_error(get_type_name(),
-              $sformatf("DATA MISMATCH! iter=%0d, trans=%0d, beat=%0d, addr=0x%0h\n  Expected: 0x%0h\n  Actual:   0x%0h",
-                        iter, r_idx, beat, beat_addr, expected_data & data_mask, actual_data & data_mask))
+              $sformatf("Address not found in write map! iter=%0d, trans=%0d, beat=%0d, addr=0x%0h",
+                        iter, r_idx, beat, beat_addr))
             error_count++;
-          end else begin
-            `uvm_info(get_type_name(),
-              $sformatf("Data match: iter=%0d, trans=%0d, beat=%0d, addr=0x%0h, data=0x%0h",
-                        iter, r_idx, beat, beat_addr, actual_data & data_mask), UVM_HIGH)
           end
         end
       end
