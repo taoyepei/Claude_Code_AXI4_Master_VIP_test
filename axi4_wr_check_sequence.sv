@@ -291,6 +291,7 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
     // Variables for read transaction processing
     bit [`AXI4_ADDR_WIDTH-1:0] expected_addr;
     bit [63:0] full_expected_addr;  // Temporary for 64-bit address
+    bit [63:0] full_beat_addr;      // Temporary for 64-bit beat address calculation
     int expected_len;
     bit [2:0] expected_size;
     int data_idx_start;
