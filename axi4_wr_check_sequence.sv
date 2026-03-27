@@ -50,6 +50,8 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
   // This avoids dependency on transaction ID which may change due to splitting
   logic [`AXI4_DATA_WIDTH-1:0] m_addr_data_map[bit [`AXI4_ADDR_WIDTH-1:0]];
   bit [2:0] m_addr_size_map[bit [`AXI4_ADDR_WIDTH-1:0]];  // Store size for each address
+  // WSTRB mask for each address - used for unaligned transfer verification
+  logic [`AXI4_STRB_WIDTH-1:0] m_addr_wstrb_map[bit [`AXI4_ADDR_WIDTH-1:0]];
 
   constraint c_num_writes {
     m_num_writes inside {[1:10000]};
@@ -245,6 +247,8 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
           // Store address-to-data mapping for verification (avoids ID dependency)
           m_addr_data_map[beat_addr] = trans.m_data[beat];
           m_addr_size_map[beat_addr] = trans.m_size;
+          // Store WSTRB for unaligned transfer verification
+          m_addr_wstrb_map[beat_addr] = trans.m_wstrb[beat];
         end
 
         `uvm_info(get_type_name(), $sformatf("Sending write [%0d][%0d]: addr=0x%0h, len=%0d, size=%0d",
@@ -351,12 +355,26 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
             expected_data = m_addr_data_map[beat_addr];
             expected_size = m_addr_size_map[beat_addr];
 
-            // Mask data based on transfer size
-            bytes_per_beat = 1 << expected_size;
-            if (bytes_per_beat * 8 >= `AXI4_DATA_WIDTH) begin
-              data_mask = '1;
+            // Calculate data mask based on WSTRB for unaligned transfer support
+            // WSTRB indicates which byte lanes contain valid data
+            if (m_addr_wstrb_map.exists(beat_addr)) begin
+              logic [`AXI4_STRB_WIDTH-1:0] wstrb;
+              wstrb = m_addr_wstrb_map[beat_addr];
+              // Convert byte-wise WSTRB to bit-wise data mask
+              data_mask = '0;
+              for (int byte_idx = 0; byte_idx < `AXI4_STRB_WIDTH; byte_idx++) begin
+                if (wstrb[byte_idx]) begin
+                  data_mask |= (8'hFF << (byte_idx * 8));
+                end
+              end
             end else begin
-              data_mask = (1 << (bytes_per_beat * 8)) - 1;
+              // Fallback to size-based mask if WSTRB not found
+              bytes_per_beat = 1 << expected_size;
+              if (bytes_per_beat * 8 >= `AXI4_DATA_WIDTH) begin
+                data_mask = '1;
+              end else begin
+                data_mask = (1 << (bytes_per_beat * 8)) - 1;
+              end
             end
 
             if ((expected_data & data_mask) !== (actual_data & data_mask)) begin
