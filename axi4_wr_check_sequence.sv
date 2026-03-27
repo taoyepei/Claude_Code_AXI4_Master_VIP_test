@@ -377,6 +377,13 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
                   data_mask |= (8'hFF << (byte_idx * 8));
                 end
               end
+              // For narrow transfer: force invalid bytes to 0 to handle X from slave
+              // This ensures comparison works even if slave drives X on unused byte lanes
+              for (int byte_idx = 0; byte_idx < `AXI4_STRB_WIDTH; byte_idx++) begin
+                if (!wstrb[byte_idx]) begin
+                  actual_data[byte_idx*8 +: 8] = 8'h00;
+                end
+              end
             end else begin
               // Fallback to size-based mask if WSTRB not found
               bytes_per_beat = 1 << expected_size;

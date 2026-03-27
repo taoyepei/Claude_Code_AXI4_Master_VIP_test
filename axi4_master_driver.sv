@@ -324,6 +324,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
         int idx = trans.m_len - remaining_len + i;
         int bytes_per_beat;
         int lower_byte;
+        int valid_bytes;
         longint all_ones;
         bit [`AXI4_ADDR_WIDTH-1:0] beat_addr;
         logic [(`AXI4_DATA_WIDTH/8)-1:0] calculated_wstrb;
@@ -333,13 +334,14 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
         if (trans.m_trans_type == WRITE) begin
           // Recalculate WSTRB based on beat address within the split segment
           // For split transactions, each segment may have different alignment
+          // AXI4 Narrow Transfer: WSTRB is valid for bytes_per_beat starting from bit 0
           bytes_per_beat = 1 << trans.m_size;
           beat_addr = current_addr + (i * bytes_per_beat);
           lower_byte = beat_addr % bytes_per_beat;
-
-          // Calculate WSTRB: valid bytes from lower_byte to end of beat
-          all_ones = (64'h1 << bytes_per_beat) - 1;
-          calculated_wstrb = ((all_ones << lower_byte) & ((64'h1 << bytes_per_beat) - 1));
+          // Valid byte count = bytes_per_beat - lower_byte (skip lower_byte bytes at start)
+          valid_bytes = bytes_per_beat - lower_byte;
+          all_ones = (64'h1 << valid_bytes) - 1;
+          calculated_wstrb = all_ones << lower_byte;
           new_trans.m_wstrb.push_back(calculated_wstrb);
         end
       end

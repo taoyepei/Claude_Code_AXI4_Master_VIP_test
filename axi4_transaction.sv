@@ -116,16 +116,24 @@ class axi4_transaction extends uvm_sequence_item;
     end
 
     // Initialize WSTRB for write transactions
+    // AXI4 Narrow Transfer: WSTRB is valid for bytes_per_beat starting from bit 0
+    // Address unalignment affects which bytes are valid within the beat
     if (m_trans_type == WRITE && m_wstrb.size() > 0) begin
       for (int beat = 0; beat <= m_len; beat++) begin
         bit [`AXI4_ADDR_WIDTH-1:0] beat_addr;
         int lower_byte;
-        longint all_ones;
+        longint valid_bytes;
+        longint wstrb_val;
         beat_addr = get_beat_addr(beat);
+        // lower_byte: address offset within a beat (for unaligned addresses)
         lower_byte = beat_addr % bytes_per_beat;
-        // Use 64-bit arithmetic to avoid overflow, then mask to STRB width
-        all_ones = (64'h1 << bytes_per_beat) - 1;
-        m_wstrb[beat] = ((all_ones << lower_byte) & ((64'h1 << bytes_per_beat) - 1));
+        // For narrow transfer: only bytes_per_beat lanes are valid (starting from bit 0)
+        // Unaligned address means we skip 'lower_byte' bytes at the start
+        // Valid byte count = bytes_per_beat - lower_byte
+        valid_bytes = bytes_per_beat - lower_byte;
+        // Use 64-bit arithmetic to avoid overflow
+        wstrb_val = (64'h1 << valid_bytes) - 1;
+        m_wstrb[beat] = wstrb_val << lower_byte;
       end
     end
 
