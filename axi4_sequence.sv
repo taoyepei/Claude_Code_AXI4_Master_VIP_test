@@ -83,12 +83,8 @@ class axi4_sequence extends uvm_sequence #(axi4_transaction);
         return 0;
       end
       // Additional check: address alignment with size
-      if (m_use_start_addr && ((m_start_addr % (1 << m_default_size)) != 0)) begin
-        `uvm_error(get_type_name(),
-          $sformatf("Address alignment error: m_start_addr=0x%0h is not aligned to m_default_size=%0d (requires %0d-byte alignment)",
-                    m_start_addr, m_default_size, (1 << m_default_size)))
-        return 0;
-      end
+      // Note: Unaligned addresses are now supported for INCR bursts
+      // Address alignment check removed to support unaligned transfers
     end
     return 1;
   endfunction

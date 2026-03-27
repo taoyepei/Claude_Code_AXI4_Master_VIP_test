@@ -67,9 +67,11 @@ class axi4_transaction extends uvm_sequence_item;
     (m_burst == WRAP) -> (m_len inside {1, 3, 7, 15});
   }
 
-  // Address must be aligned to the transfer size for all burst types
+  // Address alignment constraint
+  // AXI4 spec: Address must be aligned to transfer size for FIXED and WRAP bursts
+  // INCR bursts support unaligned addresses
   constraint c_addr_align {
-    (m_addr % (1 << m_size)) == 0;
+    (m_burst != INCR) -> ((m_addr % (1 << m_size)) == 0);
   }
 
   // Exclusive access: burst length must be power of 2 (AXI4 spec requirement)
