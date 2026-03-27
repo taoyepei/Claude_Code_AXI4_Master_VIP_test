@@ -404,14 +404,10 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
     // Phase 1: Write all data
     execute_write_phase();
 
-    // Wait for all write responses to complete before starting read
-    `uvm_info(get_type_name(), $sformatf("Waiting for %0d write responses...", m_num_writes * m_num_iterations), UVM_MEDIUM)
-    for (int i = 0; i < m_num_writes * m_num_iterations; i++) begin
-      axi4_transaction rsp;
-      get_response(rsp);
-      `uvm_info(get_type_name(), $sformatf("Write response %0d/%0d received", i+1, m_num_writes * m_num_iterations), UVM_HIGH)
-    end
-    `uvm_info(get_type_name(), "All write responses received, starting read phase", UVM_MEDIUM)
+    // Wait for writes to complete (using time delay instead of B channel responses)
+    `uvm_info(get_type_name(), "Waiting 50us for write operations to complete...", UVM_MEDIUM)
+    #50000ns;
+    `uvm_info(get_type_name(), "Delay complete, starting read phase", UVM_MEDIUM)
 
     // Phase 2: Read back and verify
     execute_read_phase();

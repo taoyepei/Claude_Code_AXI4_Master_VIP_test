@@ -19,14 +19,8 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   // Write response tracking (queue of outstanding write transactions)
   axi4_transaction m_b_pending[$];
 
-  // Read transaction tracking (queue of outstanding read transactions)
+  // Outstanding read transaction tracking
   axi4_transaction m_r_pending[$];
-
-  // Original read transaction tracking for split transactions
-  // Key: split_id (each split transaction's ID), Value: original transaction
-  axi4_transaction m_r_orig_lookup[logic [`AXI4_ID_WIDTH-1:0]];
-  // Track pending split count per original transaction (key: orig_transaction_id)
-  int m_r_pending_split_count[logic [`AXI4_ID_WIDTH-1:0]];
 
   // Split transaction ID allocation
   int m_next_split_id;
@@ -193,7 +187,6 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   task get_and_drive();
     axi4_transaction trans;
     axi4_transaction split_trans[$];
-    logic [`AXI4_ID_WIDTH-1:0] base_id;
 
     forever begin
       // Wait for reset to be done
@@ -201,28 +194,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       seq_item_port.get_next_item(trans);
 
-      // Store base_id before split (original transaction ID)
-      base_id = trans.m_id;
-
       split_transaction(trans, split_trans);
-
-      // For read transactions with splits, store original transaction for later merging
-      if (trans.m_trans_type == READ && split_trans.size() > 1) begin
-        // Store original transaction and expected split count
-        axi4_transaction orig_trans;
-        orig_trans = axi4_transaction::type_id::create("orig_read_trans");
-        orig_trans.copy(trans);
-        orig_trans.set_sequence_id(trans.get_sequence_id());
-        orig_trans.m_data.delete();  // Clear data, will be filled from responses
-        // Track pending split count by original transaction ID
-        m_r_pending_split_count[base_id] = split_trans.size();
-        `uvm_info(get_type_name(), $sformatf("DEBUG: Stored original read trans with base_id=%0d, expecting %0d splits", base_id, split_trans.size()), UVM_LOW)
-        // For each split transaction, store lookup to original transaction
-        foreach (split_trans[i]) begin
-          m_r_orig_lookup[split_trans[i].m_id] = orig_trans;
-          `uvm_info(get_type_name(), $sformatf("DEBUG: Mapped split_id=%0d to base_id=%0d", split_trans[i].m_id, base_id), UVM_LOW)
-        end
-      end
 
       // Queue split transactions for address channel
       foreach (split_trans[i]) begin
@@ -508,6 +480,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   endtask
 
   // Drive write response channel - direct signal access
+  // Note: B channel response is not sent back to sequence (per design requirement)
   task drive_b_channel();
     forever begin
       @(posedge m_vif.aclk);
@@ -527,9 +500,9 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
         found_idx = find_trans_by_id(m_b_pending, m_vif.bid, trans);
         if (found_idx >= 0) begin
           trans.m_resp_accept_time = $time;
-          // Send response back to sequence
-          `uvm_info(get_type_name(), $sformatf("DEBUG B: put_response for bid=%0d", m_vif.bid), UVM_LOW)
-          seq_item_port.put_response(trans);
+          // B channel response is consumed but NOT sent back to sequence
+          // (sequence uses time delay instead of waiting for B response)
+          `uvm_info(get_type_name(), $sformatf("DEBUG B: Write response received for bid=%0d, bresp=%0d (not sending to sequence)", m_vif.bid, m_vif.bresp), UVM_LOW)
           m_b_pending.delete(found_idx);
         end else begin
           `uvm_warning(get_type_name(), $sformatf("DEBUG B: bid=%0d not found in m_b_pending", m_vif.bid))
@@ -596,9 +569,12 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   endtask
 
   // Drive read data channel (receive) - direct signal access
+  // Note: Data is processed in order of arrival (not by ID matching)
+  // RLAST triggers put_response() directly
   task drive_r_channel();
-    logic [`AXI4_ID_WIDTH-1:0] rid;
-    int beat_count;
+    axi4_transaction trans_tmp;
+    axi4_transaction trans_resp;
+    trans_tmp = new();
 
     forever begin
       @(posedge m_vif.aclk);
@@ -611,72 +587,23 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
 
       m_vif.rready <= 1'b1;
 
-      if (m_vif.rvalid) begin
-        axi4_transaction trans;
-        int found_idx;
-        `uvm_info(get_type_name(), $sformatf("DEBUG R: rvalid=1, rid=%0d, rlast=%0b", m_vif.rid, m_vif.rlast), UVM_HIGH)
-        // Track read data
-        found_idx = find_trans_by_id(m_r_pending, m_vif.rid, trans);
-        if (found_idx >= 0) begin
-          // Store the read data in the transaction
-          int beat = trans.m_data.size();
-          trans.m_data.push_back(m_vif.rdata);
-          trans.m_resp.push_back(m_vif.rresp);
-          trans.m_ruser.push_back(m_vif.ruser);
+      if ((m_vif.rvalid == 1'b1) && (m_vif.rlast == 1'b0)) begin
+        `uvm_info(get_type_name(), $sformatf("DEBUG R: rvalid=1, rid=%0d, rlast=%0b, rdata=%h", m_vif.rid, m_vif.rlast, m_vif.rdata), UVM_LOW)
+        trans_tmp.m_data.push_back(m_vif.rdata);
+        trans_tmp.m_resp.push_back(m_vif.rresp);
+        trans_tmp.m_ruser.push_back(m_vif.ruser);
+      end
+      else if ((m_vif.rvalid == 1'b1) && (m_vif.rlast == 1'b1)) begin
+        trans_tmp.m_data.push_back(m_vif.rdata);
+        trans_tmp.m_resp.push_back(m_vif.rresp);
+        trans_tmp.m_ruser.push_back(m_vif.ruser);
+        trans_resp = m_r_pending.pop_front();
+        trans_resp.m_data = trans_tmp.m_data;
+        trans_resp.m_resp = trans_tmp.m_resp;
+        trans_resp.m_ruser = trans_tmp.m_ruser;
+        seq_item_port.put_response(trans_resp);
 
-          `uvm_info(get_type_name(), $sformatf("R channel: Received data for ID=%0d, beat=%0d, data=0x%0h", m_vif.rid, beat, m_vif.rdata), UVM_HIGH)
-
-          if (m_vif.rlast) begin
-            // Read transaction completed
-            trans.m_data_complete_time = $time;
-            m_r_pending.delete(found_idx);
-            `uvm_info(get_type_name(), $sformatf("R channel: Read transaction ID=%0d completed with %0d beats", m_vif.rid, trans.m_data.size()), UVM_LOW)
-
-            // Check if this is part of a split transaction
-            // Find base_id by checking which original transaction's split has this ID
-            // Split IDs are: base_id, base_id+1, base_id+2, ...
-            // We need to find the base_id such that trans.m_id >= base_id and trans.m_id < base_id + split_count
-            begin
-              // Check if this is a split transaction using direct lookup
-              if (m_r_orig_lookup.exists(trans.m_id)) begin
-                // This is a split transaction, accumulate data to original
-                axi4_transaction orig_trans = m_r_orig_lookup[trans.m_id];
-                logic [`AXI4_ID_WIDTH-1:0] orig_id = orig_trans.m_id;
-
-                // Append data from this split to original
-                foreach (trans.m_data[i]) begin
-                  orig_trans.m_data.push_back(trans.m_data[i]);
-                end
-                foreach (trans.m_resp[i]) begin
-                  orig_trans.m_resp.push_back(trans.m_resp[i]);
-                end
-                foreach (trans.m_ruser[i]) begin
-                  orig_trans.m_ruser.push_back(trans.m_ruser[i]);
-                end
-
-                // Remove this split from lookup
-                m_r_orig_lookup.delete(trans.m_id);
-
-                // Decrement pending split count
-                m_r_pending_split_count[orig_id]--;
-                `uvm_info(get_type_name(), $sformatf("DEBUG R: Accumulated split ID=%0d to orig_id=%0d, remaining splits=%0d, total beats=%0d", trans.m_id, orig_id, m_r_pending_split_count[orig_id], orig_trans.m_data.size()), UVM_LOW)
-
-                // If all splits received, return original transaction
-                if (m_r_pending_split_count[orig_id] == 0) begin
-                  orig_trans.m_data_complete_time = $time;
-                  seq_item_port.put_response(orig_trans);
-                  `uvm_info(get_type_name(), $sformatf("R channel: All splits complete for orig_id=%0d, returning original with %0d beats", orig_id, orig_trans.m_data.size()), UVM_LOW)
-                  m_r_pending_split_count.delete(orig_id);
-                end
-              end else begin
-                // Not a split transaction, return directly
-                seq_item_port.put_response(trans);
-              end
-            end
-          end
-        end else begin
-          `uvm_warning(get_type_name(), $sformatf("R channel: Received data for unknown ID=%0d", m_vif.rid))
-        end
+        trans_tmp = new();
       end
     end
   endtask
