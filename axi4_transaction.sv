@@ -119,11 +119,13 @@ class axi4_transaction extends uvm_sequence_item;
     if (m_trans_type == WRITE && m_wstrb.size() > 0) begin
       for (int beat = 0; beat <= m_len; beat++) begin
         // Calculate strobe based on size and alignment for first beat
+        // Use 64-bit arithmetic to avoid overflow when bytes_per_beat = 32
         if (beat == 0) begin
           int lower_byte = m_addr % bytes_per_beat;
-          m_wstrb[beat] = ((1 << bytes_per_beat) - 1) << lower_byte;
+          longint all_ones = (64'h1 << bytes_per_beat) - 1;
+          m_wstrb[beat] = (all_ones << lower_byte);
         end else begin
-          m_wstrb[beat] = (1 << bytes_per_beat) - 1;
+          m_wstrb[beat] = (64'h1 << bytes_per_beat) - 1;
         end
       end
     end
