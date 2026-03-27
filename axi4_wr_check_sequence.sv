@@ -240,12 +240,21 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
 
         // Calculate and store addresses for each beat
         for (beat = 0; beat <= trans.m_len; beat++) begin
+          logic [`AXI4_DATA_WIDTH-1:0] masked_data;
           full_beat_addr = trans.get_beat_addr(beat);
           beat_addr = full_beat_addr[`AXI4_ADDR_WIDTH-1:0];
           m_write_addr_queue[iter].push_back(beat_addr);
-          m_write_data_queue[iter].push_back(trans.m_data[beat]);
+          // Store data masked by WSTRB - only valid bytes are stored
+          // This handles unaligned transfers where some bytes are not written
+          masked_data = trans.m_data[beat];
+          for (int byte_idx = 0; byte_idx < `AXI4_STRB_WIDTH; byte_idx++) begin
+            if (!trans.m_wstrb[beat][byte_idx]) begin
+              masked_data[byte_idx*8 +: 8] = 8'h00;
+            end
+          end
+          m_write_data_queue[iter].push_back(masked_data);
           // Store address-to-data mapping for verification (avoids ID dependency)
-          m_addr_data_map[beat_addr] = trans.m_data[beat];
+          m_addr_data_map[beat_addr] = masked_data;
           m_addr_size_map[beat_addr] = trans.m_size;
           // Store WSTRB for unaligned transfer verification
           m_addr_wstrb_map[beat_addr] = trans.m_wstrb[beat];
@@ -355,8 +364,9 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
             expected_data = m_addr_data_map[beat_addr];
             expected_size = m_addr_size_map[beat_addr];
 
-            // Calculate data mask based on WSTRB for unaligned transfer support
-            // WSTRB indicates which byte lanes contain valid data
+            // For unaligned transfers, mask out bytes that were not written (WSTRB=0)
+            // The stored expected data already has invalid bytes zeroed out
+            // Calculate data mask based on WSTRB for proper comparison
             if (m_addr_wstrb_map.exists(beat_addr)) begin
               logic [`AXI4_STRB_WIDTH-1:0] wstrb;
               wstrb = m_addr_wstrb_map[beat_addr];
@@ -376,6 +386,10 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
                 data_mask = (1 << (bytes_per_beat * 8)) - 1;
               end
             end
+
+            // Mask actual data to match the stored expected data format
+            // (expected data has WSTRB=0 bytes zeroed out)
+            actual_data = actual_data & data_mask;
 
             if ((expected_data & data_mask) !== (actual_data & data_mask)) begin
               `uvm_error(get_type_name(),
