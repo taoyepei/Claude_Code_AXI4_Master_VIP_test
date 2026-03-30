@@ -258,6 +258,8 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
           m_addr_size_map[beat_addr] = trans.m_size;
           // Store WSTRB for unaligned transfer verification
           m_addr_wstrb_map[beat_addr] = trans.m_wstrb[beat];
+          `uvm_info(get_type_name(), $sformatf("DEBUG STORE: beat=%0d, beat_addr=0x%0h, masked_data=0x%0h, wstrb=0x%0h",
+                    beat, beat_addr, masked_data, trans.m_wstrb[beat]), UVM_LOW)
         end
 
         `uvm_info(get_type_name(), $sformatf("Sending write [%0d][%0d]: addr=0x%0h, len=%0d, size=%0d",
@@ -397,6 +399,10 @@ class axi4_wr_check_sequence extends uvm_sequence #(axi4_transaction);
             // Mask actual data to match the stored expected data format
             // (expected data has WSTRB=0 bytes zeroed out)
             actual_data = actual_data & data_mask;
+
+            // Debug: print address map lookup details
+            `uvm_info(get_type_name(), $sformatf("DEBUG VERIFY: beat=%0d, beat_addr=0x%0h, expected_data=0x%0h, actual_data=0x%0h, data_mask=0x%0h, wstrb=0x%0h",
+                      beat, beat_addr, expected_data & data_mask, actual_data & data_mask, data_mask, m_addr_wstrb_map.exists(beat_addr) ? m_addr_wstrb_map[beat_addr] : '0), UVM_LOW)
 
             if ((expected_data & data_mask) !== (actual_data & data_mask)) begin
               `uvm_error(get_type_name(),
