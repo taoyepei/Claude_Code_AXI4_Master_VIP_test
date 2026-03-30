@@ -47,6 +47,10 @@ class axi4_master_agent extends uvm_agent;
       uvm_config_db#(axi4_cfg)::set(this, "m_driver", "cfg", m_cfg);
       uvm_config_db#(virtual axi4_if)::set(this, "m_driver", "m_vif", m_vif);
 
+      // Pass configuration and interface to sequencer
+      uvm_config_db#(axi4_cfg)::set(this, "m_sequencer", "cfg", m_cfg);
+      uvm_config_db#(virtual axi4_if)::set(this, "m_sequencer", "m_vif", m_vif);
+
       // Create driver and sequencer
       m_sequencer = axi4_sequencer::type_id::create("m_sequencer", this);
       m_driver = axi4_master_driver::type_id::create("m_driver", this);
