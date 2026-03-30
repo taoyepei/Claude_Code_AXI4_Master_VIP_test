@@ -9,12 +9,24 @@
 // conditions where W data is sent before AW address
 class axi4_data_before_addr_sequence extends axi4_sequence;
   `uvm_object_utils(axi4_data_before_addr_sequence)
+  `uvm_declare_p_sequencer(axi4_sequencer)
 
   // Number of concurrent transactions to create overlapping
   int m_num_concurrent;
 
   // Delay between starting each transaction (in clock cycles)
   int m_inter_trans_delay;
+
+  // Configuration variables (inherited from axi4_sequence base)
+  rand bit [2:0] m_transfer_size;
+  rand axi4_burst_t m_burst_type;
+
+  // Transaction ID counter for unique IDs
+  bit [`AXI4_ID_WIDTH-1:0] m_next_trans_id;
+
+  // Length range
+  rand int m_min_len;
+  rand int m_max_len;
 
   // Use response handler instead of blocking finish_item
   axi4_transaction m_pending_responses[$];
@@ -27,6 +39,11 @@ class axi4_data_before_addr_sequence extends axi4_sequence;
     m_inter_trans_delay = 0;   // Default: no delay between starts
     m_expected_responses = 0;
     m_received_responses = 0;
+    m_next_trans_id = 0;
+    m_transfer_size = 3;       // Default 8 bytes (64-bit)
+    m_burst_type = INCR;
+    m_min_len = 0;
+    m_max_len = 15;
   endfunction
 
   // Override do_print for better debug
