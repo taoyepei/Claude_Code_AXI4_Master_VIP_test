@@ -20,7 +20,7 @@ class axi4_sequence extends uvm_sequence #(axi4_transaction);
   rand bit [63:0]        m_addr_increment;    // Address increment between transactions
 
   constraint c_num_trans {
-    m_num_transactions inside {[1:100]};
+    m_num_transactions inside {[1:10000]};
   }
 
   constraint c_len_range {
