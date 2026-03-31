@@ -29,9 +29,9 @@ class axi4_monitor extends uvm_monitor;
   time             m_first_trans_time;
   time             m_last_trans_time;
 
-  // Latency tracking
-  time             m_max_write_latency;
-  time             m_max_read_latency;
+  // Latency tracking (in clock cycles per SPEC definition)
+  longint          m_max_write_latency;
+  longint          m_max_read_latency;
   logic [`AXI4_ID_WIDTH-1:0] m_max_write_latency_id;
   logic [`AXI4_ID_WIDTH-1:0] m_max_read_latency_id;
   longint          m_total_write_latency;
@@ -135,8 +135,9 @@ class axi4_monitor extends uvm_monitor;
   // Monitor write response channel
   task monitor_b_channel();
     axi4_transaction trans;
-    time             latency;
+    longint          latency_cycles;
     time             wlast_time;
+    time             latency_time;
 
     forever begin
       @(m_vif.mon_cb);
@@ -147,20 +148,22 @@ class axi4_monitor extends uvm_monitor;
           trans.m_resp.push_back(axi4_resp_t'(m_vif.mon_cb.bresp));
           trans.m_buser = m_vif.mon_cb.buser;
 
-          // Calculate write latency (AW handshake to WLAST)
+          // Calculate write latency in clock cycles (AW handshake to WLAST per SPEC)
           if (m_wlast_time.exists(m_vif.mon_cb.bid)) begin
             wlast_time = m_wlast_time[m_vif.mon_cb.bid];
-            latency = wlast_time - trans.m_addr_accept_time;
+            latency_time = wlast_time - trans.m_addr_accept_time;
+            // Convert time difference to clock cycles: cycles = time_ns * freq_MHz / 1000
+            latency_cycles = (latency_time * m_cfg.m_clock_freq) / 1000;
             m_wlast_time.delete(m_vif.mon_cb.bid);
           end else begin
-            latency = 0;
+            latency_cycles = 0;
           end
 
-          if (latency > m_max_write_latency) begin
-            m_max_write_latency = latency;
+          if (latency_cycles > m_max_write_latency) begin
+            m_max_write_latency = latency_cycles;
             m_max_write_latency_id = trans.m_id;
           end
-          m_total_write_latency += latency;
+          m_total_write_latency += latency_cycles;
 
           // Send to analysis port
           m_analysis_port.write(trans);
@@ -213,7 +216,8 @@ class axi4_monitor extends uvm_monitor;
   // Monitor read data channel
   task monitor_r_channel();
     axi4_transaction trans;
-    time             latency;
+    longint          latency_cycles;
+    time             latency_time;
 
     forever begin
       @(m_vif.mon_cb);
@@ -228,14 +232,16 @@ class axi4_monitor extends uvm_monitor;
           if (m_vif.mon_cb.rlast) begin
             trans.m_resp_accept_time = $time;
 
-            // Calculate read latency (AR handshake to RLAST)
-            latency = trans.m_resp_accept_time - trans.m_addr_accept_time;
+            // Calculate read latency in clock cycles (AR handshake to RLAST per SPEC)
+            latency_time = trans.m_resp_accept_time - trans.m_addr_accept_time;
+            // Convert time difference to clock cycles: cycles = time_ns * freq_MHz / 1000
+            latency_cycles = (latency_time * m_cfg.m_clock_freq) / 1000;
 
-            if (latency > m_max_read_latency) begin
-              m_max_read_latency = latency;
+            if (latency_cycles > m_max_read_latency) begin
+              m_max_read_latency = latency_cycles;
               m_max_read_latency_id = trans.m_id;
             end
-            m_total_read_latency += latency;
+            m_total_read_latency += latency_cycles;
 
             // Send to analysis port
             m_analysis_port.write(trans);
@@ -281,14 +287,16 @@ class axi4_monitor extends uvm_monitor;
     end
   endtask
 
-  // Report phase - print bandwidth and latency statistics
+  // Report phase - print bandwidth and latency statistics per SPEC
   function void report_phase(uvm_phase phase);
     real bandwidth_efficiency;
     real total_time_ns;
-    real theoretical_bandwidth;
-    real actual_bandwidth;
+    real total_time_s;
+    real theoretical_bandwidth;  // bytes per second
+    real actual_bandwidth;       // bytes per second
     real avg_write_latency;
     real avg_read_latency;
+    real clock_period_ns;
 
     m_total_trans_count = m_write_trans_count + m_read_trans_count;
 
@@ -301,13 +309,23 @@ class axi4_monitor extends uvm_monitor;
     if (total_time_ns == 0) begin
       total_time_ns = 1;
     end
+    total_time_s = total_time_ns * 1.0e-9;  // Convert ns to seconds
 
-    // Bandwidth calculation (bytes per ns)
-    theoretical_bandwidth = (m_cfg.m_data_width / 8);
-    actual_bandwidth = m_total_data_bytes / total_time_ns;
+    // Clock period in ns: period = 1000 / freq_MHz
+    clock_period_ns = 1000.0 / m_cfg.m_clock_freq;
+
+    // Bandwidth calculation per SPEC:
+    // Theoretical bandwidth = (data_width / 8) * clock_freq (bytes/second)
+    // clock_freq in Hz = m_clock_freq * 1,000,000
+    theoretical_bandwidth = (m_cfg.m_data_width / 8.0) * m_cfg.m_clock_freq * 1.0e6;
+
+    // Actual bandwidth = total_data_bytes / total_time (bytes/second)
+    actual_bandwidth = m_total_data_bytes / total_time_s;
+
+    // Bandwidth efficiency = (actual / theoretical) * 100%
     bandwidth_efficiency = (actual_bandwidth / theoretical_bandwidth) * 100.0;
 
-    // Average latencies
+    // Average latencies (in clock cycles per SPEC)
     if (m_write_trans_count > 0) begin
       avg_write_latency = m_total_write_latency / m_write_trans_count;
     end else begin
@@ -324,21 +342,28 @@ class axi4_monitor extends uvm_monitor;
       "========================================\n" +
       "AXI4 Monitor Statistics Report\n" +
       "========================================\n" +
+      "Clock Frequency: %0d MHz (Period: %0f ns)\n" +
       "Total Transactions: %0d (Write: %0d, Read: %0d)\n" +
       "Total Data Transferred: %0d bytes\n" +
-      "Total Time: %0f ns\n" +
-      "Bandwidth Efficiency: %0f%%\n" +
+      "Total Time: %0f ns (%0f us)\n" +
       "----------------------------------------\n" +
-      "Write Latency:\n" +
-      "  Max: %0t (AWID=%0d)\n" +
-      "  Avg: %0f\n" +
-      "Read Latency:\n" +
-      "  Max: %0t (ARID=%0d)\n" +
-      "  Avg: %0f\n" +
+      "Bandwidth Statistics:\n" +
+      "  Theoretical Bandwidth: %0f MB/s\n" +
+      "  Actual Bandwidth: %0f MB/s\n" +
+      "  Bandwidth Efficiency: %0f%%\n" +
+      "----------------------------------------\n" +
+      "Write Latency (AW to WLAST in clock cycles):\n" +
+      "  Max: %0d cycles (AWID=%0d)\n" +
+      "  Avg: %0f cycles\n" +
+      "Read Latency (AR to RLAST in clock cycles):\n" +
+      "  Max: %0d cycles (ARID=%0d)\n" +
+      "  Avg: %0f cycles\n" +
       "========================================",
+      m_cfg.m_clock_freq, clock_period_ns,
       m_total_trans_count, m_write_trans_count, m_read_trans_count,
       m_total_data_bytes,
-      total_time_ns,
+      total_time_ns, total_time_ns/1000.0,
+      theoretical_bandwidth/1.0e6, actual_bandwidth/1.0e6,
       bandwidth_efficiency,
       m_max_write_latency, m_max_write_latency_id,
       avg_write_latency,

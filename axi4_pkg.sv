@@ -45,6 +45,9 @@ package axi4_pkg;
     int m_wtimeout;
     int m_rtimeout;
 
+    // Clock frequency in MHz for bandwidth calculation
+    int m_clock_freq;
+
     // Feature enables
     bit m_support_data_before_addr;
 
@@ -60,6 +63,7 @@ package axi4_pkg;
       m_data_before_addr_osd    = 0;
       m_wtimeout                = 1000;
       m_rtimeout                = 1000;
+      m_clock_freq              = 100;  // Default 100MHz
       m_support_data_before_addr = 0;
     endfunction
 
@@ -77,6 +81,7 @@ package axi4_pkg;
       m_data_before_addr_osd    = rhs_.m_data_before_addr_osd;
       m_wtimeout                = rhs_.m_wtimeout;
       m_rtimeout                = rhs_.m_rtimeout;
+      m_clock_freq              = rhs_.m_clock_freq;
       m_support_data_before_addr = rhs_.m_support_data_before_addr;
     endfunction
 
@@ -95,13 +100,14 @@ package axi4_pkg;
       do_compare &= (m_data_before_addr_osd    == rhs_.m_data_before_addr_osd);
       do_compare &= (m_wtimeout                == rhs_.m_wtimeout);
       do_compare &= (m_rtimeout                == rhs_.m_rtimeout);
+      do_compare &= (m_clock_freq              == rhs_.m_clock_freq);
       do_compare &= (m_support_data_before_addr == rhs_.m_support_data_before_addr);
     endfunction
 
     function string convert2string();
       string s;
-      s = $sformatf("AXI4_CFG: data_width=%0d, addr_width=%0d, id_width=%0d, max_outstanding=%0d, trans_interval=%0d, data_before_addr_osd=%0d, wtimeout=%0d, rtimeout=%0d, support_data_before_addr=%0b",
-                    m_data_width, m_addr_width, m_id_width, m_max_outstanding, m_trans_interval, m_data_before_addr_osd, m_wtimeout, m_rtimeout, m_support_data_before_addr);
+      s = $sformatf("AXI4_CFG: data_width=%0d, addr_width=%0d, id_width=%0d, max_outstanding=%0d, trans_interval=%0d, data_before_addr_osd=%0d, wtimeout=%0d, rtimeout=%0d, clock_freq=%0dMHz, support_data_before_addr=%0b",
+                    m_data_width, m_addr_width, m_id_width, m_max_outstanding, m_trans_interval, m_data_before_addr_osd, m_wtimeout, m_rtimeout, m_clock_freq, m_support_data_before_addr);
       return s;
     endfunction
 
@@ -114,6 +120,7 @@ package axi4_pkg;
       printer.print_int("m_data_before_addr_osd", m_data_before_addr_osd, $bits(m_data_before_addr_osd));
       printer.print_int("m_wtimeout", m_wtimeout, $bits(m_wtimeout));
       printer.print_int("m_rtimeout", m_rtimeout, $bits(m_rtimeout));
+      printer.print_int("m_clock_freq", m_clock_freq, $bits(m_clock_freq));
       printer.print_int("m_support_data_before_addr", m_support_data_before_addr, $bits(m_support_data_before_addr));
     endfunction
 
@@ -127,6 +134,7 @@ package axi4_pkg;
       `uvm_record_int("m_data_before_addr_osd", m_data_before_addr_osd, $bits(m_data_before_addr_osd))
       `uvm_record_int("m_wtimeout", m_wtimeout, $bits(m_wtimeout))
       `uvm_record_int("m_rtimeout", m_rtimeout, $bits(m_rtimeout))
+      `uvm_record_int("m_clock_freq", m_clock_freq, $bits(m_clock_freq))
       `uvm_record_int("m_support_data_before_addr", m_support_data_before_addr, $bits(m_support_data_before_addr))
     endfunction
   endclass
