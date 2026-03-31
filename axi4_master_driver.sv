@@ -207,6 +207,15 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
           end
           if (!m_reset_done) break;
           m_aw_pending.push_back(split_trans[i]);
+
+          // For data-before-address mode: also push to W queue immediately
+          // This allows W channel to send data before AW channel sends address
+          if (m_cfg.m_support_data_before_addr) begin
+            m_w_queue.push_back(split_trans[i]);
+            `uvm_info(get_type_name(),
+              $sformatf("Data-Before-Address mode: Pushed trans id=%0d to W queue immediately", split_trans[i].m_id),
+              UVM_MEDIUM)
+          end
         end else begin
           // Read transaction
           while (m_ar_pending.size() >= m_cfg.m_max_outstanding) begin
@@ -360,6 +369,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   endfunction
 
   // Drive write address channel - direct signal access, no clocking block
+  // Supports back-to-back address transmission when m_trans_interval=0
   task drive_aw_channel();
     axi4_transaction trans;
 
@@ -372,49 +382,56 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       // Skip if no pending transaction
       if (m_aw_pending.size() == 0) continue;
 
-      trans = m_aw_pending.pop_front();
+      // Process all pending transactions with back-to-back support
+      while (m_aw_pending.size() > 0 && m_reset_done) begin
+        trans = m_aw_pending.pop_front();
 
-      // Drive all AW signals together
-      m_vif.awid    <= trans.m_id;
-      m_vif.awaddr  <= trans.m_addr;
-      m_vif.awlen   <= trans.m_len;
-      m_vif.awsize  <= trans.m_size;
-      m_vif.awburst <= trans.m_burst;
-      m_vif.awlock  <= trans.m_lock;
-      m_vif.awcache <= trans.m_cache;
-      m_vif.awprot  <= trans.m_prot;
-      m_vif.awqos   <= trans.m_qos;
-      m_vif.awregion <= trans.m_region;
-      m_vif.awuser  <= trans.m_user;
-      m_vif.awvalid <= 1'b1;
+        // Drive all AW signals together
+        m_vif.awid    <= trans.m_id;
+        m_vif.awaddr  <= trans.m_addr;
+        m_vif.awlen   <= trans.m_len;
+        m_vif.awsize  <= trans.m_size;
+        m_vif.awburst <= trans.m_burst;
+        m_vif.awlock  <= trans.m_lock;
+        m_vif.awcache <= trans.m_cache;
+        m_vif.awprot  <= trans.m_prot;
+        m_vif.awqos   <= trans.m_qos;
+        m_vif.awregion <= trans.m_region;
+        m_vif.awuser  <= trans.m_user;
+        m_vif.awvalid <= 1'b1;
 
-      // Wait for address to be accepted
-      @(posedge m_vif.aclk);
-      while (m_reset_done && !m_vif.awready) begin
+        // Wait for address to be accepted
         @(posedge m_vif.aclk);
-      end
+        while (m_reset_done && !m_vif.awready) begin
+          @(posedge m_vif.aclk);
+        end
 
-      if (!m_reset_done) begin
+        if (!m_reset_done) begin
+          m_vif.awvalid <= 1'b0;
+          break;
+        end
+
+        trans.m_addr_accept_time = $time;
         m_vif.awvalid <= 1'b0;
-        continue;
-      end
 
-      trans.m_addr_accept_time = $time;
-      m_vif.awvalid <= 1'b0;
+        `uvm_info(get_type_name(), $sformatf("AW channel: Address 0x%0h accepted at time %0t", trans.m_addr, $time), UVM_LOW)
 
-      `uvm_info(get_type_name(), $sformatf("AW channel: Address 0x%0h accepted at time %0t", trans.m_addr, $time), UVM_LOW)
+        // Track for write completion (including timeout tracking)
+        `uvm_info(get_type_name(), $sformatf("DEBUG AW: Storing trans with id=%0d in m_b_pending", trans.m_id), UVM_LOW)
+        m_b_pending.push_back(trans);
 
-      // Track for write completion
-      `uvm_info(get_type_name(), $sformatf("DEBUG AW: Storing trans with id=%0d in m_b_pending", trans.m_id), UVM_LOW)
-      m_b_pending.push_back(trans);
+        // Queue for W channel (only if NOT in data-before-address mode)
+        // In data-before-address mode, get_and_drive already pushed to m_w_queue
+        if (!m_cfg.m_support_data_before_addr) begin
+          m_w_queue.push_back(trans);
+        end
 
-      // Queue for W channel
-      m_w_queue.push_back(trans);
-
-      // Transaction interval - wait specified cycles before next transaction
-      repeat (m_trans_interval) begin
-        @(posedge m_vif.aclk);
-        if (!m_reset_done) break;
+        // Transaction interval - wait specified cycles before next transaction
+        // If m_trans_interval=0 and slave is ready, addresses can be back-to-back
+        repeat (m_trans_interval) begin
+          @(posedge m_vif.aclk);
+          if (!m_reset_done) break;
+        end
       end
     end
   endtask
@@ -423,6 +440,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   task drive_w_channel();
     axi4_transaction trans;
     int w_count;
+    int found_idx;
 
     forever begin
       @(posedge m_vif.aclk);
@@ -433,21 +451,23 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       if (m_w_queue.size() > 0) begin
         // Check data_before_addr_osd limit
         w_count = m_b_pending.size();
+        trans = m_w_queue[0];  // Peek at front without popping
 
         if (!m_cfg.m_support_data_before_addr) begin
-          // Normal mode: need address first (aw has been sent, in m_b_pending)
-          if (w_count > 0) begin
+          // Normal mode: W can only be sent after AW is sent (trans in m_b_pending)
+          axi4_transaction dummy_trans;
+          found_idx = find_trans_by_id(m_b_pending, trans.m_id, dummy_trans);
+          if (found_idx >= 0) begin
+            // AW already sent, can send W data
             trans = m_w_queue.pop_front();
 
             for (int beat = 0; beat <= trans.m_len && m_reset_done; beat++) begin
-              // Drive W signals
               m_vif.wdata <= trans.m_data[beat];
               m_vif.wstrb <= trans.m_wstrb[beat];
               m_vif.wlast <= (beat == trans.m_len);
               m_vif.wuser <= trans.m_wuser[beat];
               m_vif.wvalid <= 1'b1;
 
-              // Wait for data to be accepted
               @(posedge m_vif.aclk);
               while (m_reset_done && !m_vif.wready) begin
                 @(posedge m_vif.aclk);
@@ -456,27 +476,28 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
               if (!m_reset_done) break;
             end
 
-            if (m_reset_done) begin
-              trans.m_data_complete_time = $time;
-            end
+            if (m_reset_done) trans.m_data_complete_time = $time;
             m_vif.wvalid <= 1'b0;
             m_vif.wlast <= 1'b0;
             m_vif.wuser <= '0;
           end
         end else begin
-          // Data before addr mode: check osd limit
-          if (w_count <= m_cfg.m_data_before_addr_osd) begin
+          // Data before addr mode
+          // Check if AW already sent (trans is in m_b_pending)
+          axi4_transaction dummy_trans;
+          found_idx = find_trans_by_id(m_b_pending, trans.m_id, dummy_trans);
+
+          if (found_idx >= 0) begin
+            // AW already sent, can always send W data
             trans = m_w_queue.pop_front();
 
             for (int beat = 0; beat <= trans.m_len && m_reset_done; beat++) begin
-              // Drive W signals
               m_vif.wdata <= trans.m_data[beat];
               m_vif.wstrb <= trans.m_wstrb[beat];
               m_vif.wlast <= (beat == trans.m_len);
               m_vif.wuser <= trans.m_wuser[beat];
               m_vif.wvalid <= 1'b1;
 
-              // Wait for data to be accepted
               @(posedge m_vif.aclk);
               while (m_reset_done && !m_vif.wready) begin
                 @(posedge m_vif.aclk);
@@ -485,32 +506,86 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
               if (!m_reset_done) break;
             end
 
-            if (m_reset_done) begin
-              trans.m_data_complete_time = $time;
+            if (m_reset_done) trans.m_data_complete_time = $time;
+            m_vif.wvalid <= 1'b0;
+            m_vif.wlast <= 1'b0;
+            m_vif.wuser <= '0;
+          end else if (w_count < m_cfg.m_data_before_addr_osd) begin
+            // AW not sent yet, but osd limit allows data before addr
+            trans = m_w_queue.pop_front();
+
+            `uvm_info(get_type_name(),
+              $sformatf("Data-Before-Address: Sending W data before AW for trans id=%0d (osd=%0d, limit=%0d)",
+                        trans.m_id, w_count, m_cfg.m_data_before_addr_osd),
+              UVM_MEDIUM)
+
+            for (int beat = 0; beat <= trans.m_len && m_reset_done; beat++) begin
+              m_vif.wdata <= trans.m_data[beat];
+              m_vif.wstrb <= trans.m_wstrb[beat];
+              m_vif.wlast <= (beat == trans.m_len);
+              m_vif.wuser <= trans.m_wuser[beat];
+              m_vif.wvalid <= 1'b1;
+
+              @(posedge m_vif.aclk);
+              while (m_reset_done && !m_vif.wready) begin
+                @(posedge m_vif.aclk);
+              end
+
+              if (!m_reset_done) break;
             end
+
+            if (m_reset_done) trans.m_data_complete_time = $time;
             m_vif.wvalid <= 1'b0;
             m_vif.wlast <= 1'b0;
             m_vif.wuser <= '0;
           end
+          // else: AW not sent and osd limit reached, wait for AW to be sent first
         end
       end
     end
   endtask
 
   // Drive write response channel - direct signal access
-  // Note: B channel response is not sent back to sequence (per design requirement)
+  // Includes write timeout detection
   task drive_b_channel();
+    int timeout_counter;
+
+    timeout_counter = 0;
+
     forever begin
       @(posedge m_vif.aclk);
 
       // Skip if reset not done
       if (!m_reset_done) begin
         m_vif.bready <= 1'b0;
+        timeout_counter = 0;
         continue;
       end
 
       m_vif.bready <= 1'b1;
 
+      // Check for write timeout
+      if (m_b_pending.size() > 0) begin
+        timeout_counter++;
+        if (timeout_counter >= m_cfg.m_wtimeout) begin
+          `uvm_error(get_type_name(),
+            $sformatf("Write timeout detected! %0d transactions pending for %0d cycles (timeout=%0d)",
+                      m_b_pending.size(), timeout_counter, m_cfg.m_wtimeout))
+          // Log all pending transactions
+          foreach (m_b_pending[i]) begin
+            `uvm_info(get_type_name(),
+              $sformatf("  Pending[%0d]: id=%0d, addr=0x%0h, len=%0d, time since AW=%0t",
+                        i, m_b_pending[i].m_id, m_b_pending[i].m_addr, m_b_pending[i].m_len,
+                        $time - m_b_pending[i].m_addr_accept_time),
+              UVM_LOW)
+          end
+          timeout_counter = 0;  // Reset to avoid continuous errors
+        end
+      end else begin
+        timeout_counter = 0;
+      end
+
+      // Process B response
       if (m_vif.bvalid) begin
         axi4_transaction trans;
         int found_idx;
@@ -518,10 +593,11 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
         found_idx = find_trans_by_id(m_b_pending, m_vif.bid, trans);
         if (found_idx >= 0) begin
           trans.m_resp_accept_time = $time;
-          // B channel response is consumed but NOT sent back to sequence
-          // (sequence uses time delay instead of waiting for B response)
-          `uvm_info(get_type_name(), $sformatf("DEBUG B: Write response received for bid=%0d, bresp=%0d (not sending to sequence)", m_vif.bid, m_vif.bresp), UVM_LOW)
+          `uvm_info(get_type_name(),
+            $sformatf("DEBUG B: Write response received for bid=%0d, bresp=%0d (not sending to sequence)",
+                      m_vif.bid, m_vif.bresp), UVM_LOW)
           m_b_pending.delete(found_idx);
+          timeout_counter = 0;  // Reset timeout counter when response received
         end else begin
           `uvm_warning(get_type_name(), $sformatf("DEBUG B: bid=%0d not found in m_b_pending", m_vif.bid))
         end
@@ -530,6 +606,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
   endtask
 
   // Drive read address channel - direct signal access, no clocking block
+  // Supports back-to-back address transmission when m_trans_interval=0
   task drive_ar_channel();
     axi4_transaction trans;
 
@@ -542,57 +619,65 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       // Skip if no pending transaction
       if (m_ar_pending.size() == 0) continue;
 
-      trans = m_ar_pending.pop_front();
+      // Process all pending transactions with back-to-back support
+      while (m_ar_pending.size() > 0 && m_reset_done) begin
+        trans = m_ar_pending.pop_front();
 
-      // Drive all AR signals together
-      m_vif.arid    <= trans.m_id;
-      m_vif.araddr  <= trans.m_addr;
-      m_vif.arlen   <= trans.m_len;
-      m_vif.arsize  <= trans.m_size;
-      m_vif.arburst <= trans.m_burst;
-      m_vif.arlock  <= trans.m_lock;
-      m_vif.arcache <= trans.m_cache;
-      m_vif.arprot  <= trans.m_prot;
-      m_vif.arqos   <= trans.m_qos;
-      m_vif.arregion <= trans.m_region;
-      m_vif.aruser  <= trans.m_user;
-      m_vif.arvalid <= 1'b1;
+        // Drive all AR signals together
+        m_vif.arid    <= trans.m_id;
+        m_vif.araddr  <= trans.m_addr;
+        m_vif.arlen   <= trans.m_len;
+        m_vif.arsize  <= trans.m_size;
+        m_vif.arburst <= trans.m_burst;
+        m_vif.arlock  <= trans.m_lock;
+        m_vif.arcache <= trans.m_cache;
+        m_vif.arprot  <= trans.m_prot;
+        m_vif.arqos   <= trans.m_qos;
+        m_vif.arregion <= trans.m_region;
+        m_vif.aruser  <= trans.m_user;
+        m_vif.arvalid <= 1'b1;
 
-      // Wait for address to be accepted
-      @(posedge m_vif.aclk);
-      while (m_reset_done && !m_vif.arready) begin
+        // Wait for address to be accepted
         @(posedge m_vif.aclk);
-      end
+        while (m_reset_done && !m_vif.arready) begin
+          @(posedge m_vif.aclk);
+        end
 
-      if (!m_reset_done) begin
+        if (!m_reset_done) begin
+          m_vif.arvalid <= 1'b0;
+          break;
+        end
+
+        trans.m_addr_accept_time = $time;
         m_vif.arvalid <= 1'b0;
-        continue;
-      end
 
-      trans.m_addr_accept_time = $time;
-      m_vif.arvalid <= 1'b0;
+        `uvm_info(get_type_name(), $sformatf("AR channel: Address 0x%0h accepted at time %0t", trans.m_addr, $time), UVM_LOW)
 
-      `uvm_info(get_type_name(), $sformatf("AR channel: Address 0x%0h accepted at time %0t", trans.m_addr, $time), UVM_LOW)
+        `uvm_info(get_type_name(), $sformatf("DEBUG AR: Storing trans with id=%0d in m_r_pending", trans.m_id), UVM_LOW)
+        // Store for tracking read data (including timeout tracking)
+        m_r_pending.push_back(trans);
 
-      `uvm_info(get_type_name(), $sformatf("DEBUG AR: Storing trans with id=%0d in m_r_pending", trans.m_id), UVM_LOW)
-      // Store for tracking read data
-      m_r_pending.push_back(trans);
-
-      // Transaction interval - wait specified cycles before next transaction
-      repeat (m_trans_interval) begin
-        @(posedge m_vif.aclk);
-        if (!m_reset_done) break;
+        // Transaction interval - wait specified cycles before next transaction
+        // If m_trans_interval=0 and slave is ready, addresses can be back-to-back
+        repeat (m_trans_interval) begin
+          @(posedge m_vif.aclk);
+          if (!m_reset_done) break;
+        end
       end
     end
   endtask
 
   // Drive read data channel (receive) - direct signal access
+  // Includes read timeout detection
   // Note: Data is processed in order of arrival (not by ID matching)
   // RLAST triggers put_response() directly
   task drive_r_channel();
     axi4_transaction trans_tmp;
     axi4_transaction trans_resp;
+    int r_timeout_counter;
+
     trans_tmp = new();
+    r_timeout_counter = 0;
 
     forever begin
       @(posedge m_vif.aclk);
@@ -600,11 +685,34 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
       // Skip if reset not done
       if (!m_reset_done) begin
         m_vif.rready <= 1'b0;
+        r_timeout_counter = 0;
         continue;
       end
 
       m_vif.rready <= 1'b1;
 
+      // Check for read timeout
+      if (m_r_pending.size() > 0) begin
+        r_timeout_counter++;
+        if (r_timeout_counter >= m_cfg.m_rtimeout) begin
+          `uvm_error(get_type_name(),
+            $sformatf("Read timeout detected! %0d transactions pending for %0d cycles (timeout=%0d)",
+                      m_r_pending.size(), r_timeout_counter, m_cfg.m_rtimeout))
+          // Log all pending transactions
+          foreach (m_r_pending[i]) begin
+            `uvm_info(get_type_name(),
+              $sformatf("  Pending[%0d]: id=%0d, addr=0x%0h, len=%0d, time since AR=%0t",
+                        i, m_r_pending[i].m_id, m_r_pending[i].m_addr, m_r_pending[i].m_len,
+                        $time - m_r_pending[i].m_addr_accept_time),
+              UVM_LOW)
+          end
+          r_timeout_counter = 0;  // Reset to avoid continuous errors
+        end
+      end else begin
+        r_timeout_counter = 0;
+      end
+
+      // Process R response
       if ((m_vif.rvalid == 1'b1) && (m_vif.rlast == 1'b0)) begin
         `uvm_info(get_type_name(), $sformatf("DEBUG R: rvalid=1, rid=%0d, rlast=%0b, rdata=%h", m_vif.rid, m_vif.rlast, m_vif.rdata), UVM_LOW)
         trans_tmp.m_data.push_back(m_vif.rdata);
@@ -622,6 +730,7 @@ class axi4_master_driver extends uvm_driver #(axi4_transaction);
         seq_item_port.put_response(trans_resp);
 
         trans_tmp = new();
+        r_timeout_counter = 0;  // Reset timeout counter when read completes
       end
     end
   endtask
