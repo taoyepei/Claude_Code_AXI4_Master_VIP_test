@@ -37,9 +37,10 @@ class axi4_monitor extends uvm_monitor;
   longint          m_total_write_latency;
   longint          m_total_read_latency;
 
-  // Timeout tracking
-  time             m_aw_accept_time[logic [`AXI4_ID_WIDTH-1:0]];
-  time             m_ar_accept_time[logic [`AXI4_ID_WIDTH-1:0]];
+  // Timeout tracking (store cycle count instead of time)
+  longint          m_aw_accept_cycle[logic [`AXI4_ID_WIDTH-1:0]];
+  longint          m_ar_accept_cycle[logic [`AXI4_ID_WIDTH-1:0]];
+  longint          m_cycle_counter;
   event            m_timeout_event;
 
   function new(string name = "axi4_monitor", uvm_component parent);
@@ -57,6 +58,7 @@ class axi4_monitor extends uvm_monitor;
     m_max_read_latency_id = 0;
     m_total_write_latency = 0;
     m_total_read_latency = 0;
+    m_cycle_counter = 0;
   endfunction
 
   function void build_phase(uvm_phase phase);
@@ -107,7 +109,7 @@ class axi4_monitor extends uvm_monitor;
         trans.m_addr_accept_time = $time;
 
         m_aw_trans[trans.m_id] = trans;
-        m_aw_accept_time[trans.m_id] = $time;
+        m_aw_accept_cycle[trans.m_id] = m_cycle_counter;
       end
     end
   endtask
@@ -173,7 +175,7 @@ class axi4_monitor extends uvm_monitor;
           m_total_data_bytes += (trans.m_len + 1) * (1 << trans.m_size);
 
           m_aw_trans.delete(m_vif.mon_cb.bid);
-          m_aw_accept_time.delete(m_vif.mon_cb.bid);
+          m_aw_accept_cycle.delete(m_vif.mon_cb.bid);
         end
       end
     end
@@ -203,7 +205,7 @@ class axi4_monitor extends uvm_monitor;
         trans.m_addr_accept_time = $time;
 
         m_ar_trans[trans.m_id] = trans;
-        m_ar_accept_time[trans.m_id] = $time;
+        m_ar_accept_cycle[trans.m_id] = m_cycle_counter;
 
         // Track first transaction time
         if (m_first_trans_time == 0) begin
@@ -252,35 +254,35 @@ class axi4_monitor extends uvm_monitor;
             m_last_trans_time = $time;
 
             m_ar_trans.delete(m_vif.mon_cb.rid);
-            m_ar_accept_time.delete(m_vif.mon_cb.rid);
+            m_ar_accept_cycle.delete(m_vif.mon_cb.rid);
           end
         end
       end
     end
   endtask
 
-  // Timeout checker
+  // Timeout checker - uses cycle count for accurate cycle-based timeout
   task timeout_checker();
-    time current_time;
-
     forever begin
       @(m_vif.mon_cb);
-      current_time = $time;
+      m_cycle_counter++;  // Increment cycle counter each clock cycle
 
-      // Check write timeout (AW to BVALID)
-      foreach (m_aw_accept_time[id]) begin
-        if ((current_time - m_aw_accept_time[id]) > m_cfg.m_wtimeout) begin
+      // Check write timeout (AW to BVALID in clock cycles)
+      foreach (m_aw_accept_cycle[id]) begin
+        if ((m_cycle_counter - m_aw_accept_cycle[id]) > m_cfg.m_wtimeout) begin
           `uvm_warning(get_type_name(),
-            $sformatf("Write transaction timeout! Time=%0t, AWID=%0d", current_time, id))
+            $sformatf("Write transaction timeout! Cycles=%0d, AWID=%0d, timeout=%0d cycles",
+                      m_cycle_counter - m_aw_accept_cycle[id], id, m_cfg.m_wtimeout))
           -> m_timeout_event;
         end
       end
 
-      // Check read timeout (AR to RLAST)
-      foreach (m_ar_accept_time[id]) begin
-        if ((current_time - m_ar_accept_time[id]) > m_cfg.m_rtimeout) begin
+      // Check read timeout (AR to RLAST in clock cycles)
+      foreach (m_ar_accept_cycle[id]) begin
+        if ((m_cycle_counter - m_ar_accept_cycle[id]) > m_cfg.m_rtimeout) begin
           `uvm_warning(get_type_name(),
-            $sformatf("Read transaction timeout! Time=%0t, ARID=%0d", current_time, id))
+            $sformatf("Read transaction timeout! Cycles=%0d, ARID=%0d, timeout=%0d cycles",
+                      m_cycle_counter - m_ar_accept_cycle[id], id, m_cfg.m_rtimeout))
           -> m_timeout_event;
         end
       end
